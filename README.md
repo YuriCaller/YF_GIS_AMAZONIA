@@ -12,14 +12,14 @@ Plugin unificado para QGIS que integra herramientas especializadas en saneamient
 ### Catastral
 | Herramienta | Estado | Descripción |
 |---|---|---|
-| **Memoria Descriptiva** | Migración pendiente | Generador automático de memorias descriptivas para regularización de predios rurales |
-| **Segmentador** | Migración pendiente | División y partición de parcelas con Atlas automático |
-| **YF Tools Plus** | Migración pendiente | Cálculo de coordenadas, vértices, áreas y perímetros |
+| **Memoria Descriptiva** | ✅ Integrado | Generador automático de memorias descriptivas para regularización de predios rurales |
+| **Segmentador** | ✅ Integrado | División y partición de parcelas con Atlas automático |
+| **YF Tools Plus** | ✅ Integrado | Cálculo de coordenadas, vértices, áreas y perímetros |
 
 ### Geodesia / GNSS
 | Herramienta | Estado | Descripción |
 |---|---|---|
-| **Post-Proceso PPK/PPP** | Migración pendiente | Procesamiento GNSS con RTKLIB, reportes PDF y archivos .cor para IGN |
+| **Post-Proceso PPK/PPP** | ✅ Integrado | Procesamiento GNSS con RTKLIB, reportes PDF y archivos .cor para IGN |
 
 ### Agroforestal / Ambiental
 | Herramienta | Estado | Descripción |
@@ -29,7 +29,7 @@ Plugin unificado para QGIS que integra herramientas especializadas en saneamient
 ### Búsqueda y Análisis
 | Herramienta | Estado | Descripción |
 |---|---|---|
-| **Attribute Search** | Migración pendiente | Búsqueda avanzada multi-capa con reportes y visualización |
+| **Attribute Search** | ✅ Integrado | Búsqueda avanzada multi-capa con reportes y visualización |
 
 ---
 
