@@ -1,0 +1,42 @@
+[general]
+name=YF GIS Amazonia Tools
+qgisMinimumVersion=3.22
+qgisMaximumVersion=3.99
+description=Professional GIS toolkit for cadastral regularization, surveying, GNSS post-processing and agroforestry management in the Peruvian Amazon.
+version=1.0.0
+author=Yuri Fabian Caller Cordova
+email=yuricaller@gmail.com
+
+about=Unified plugin integrating six specialized tools for Peruvian Amazon surveying and forestry professionals.
+    CADASTRAL: Automatic technical memoir (memoria descriptiva) generator for rural land regularization; Parcel segmenter with azimuth and angle calculations; Coordinate, vertex, area and perimeter calculator (YF Tools Plus).
+    GEODESY / GNSS: PPK and PPP post-processing with RTKLIB, PDF technical reports, .cor output files for IGN Peru submissions.
+    AGROFORESTRY: Agroforestry system (SAF) generator with unique plant identification and multiple spatial distribution methods.
+    SEARCH AND ANALYSIS: Advanced multi-layer attribute search with report generation and visualization.
+    REQUIREMENTS: python-docx (required for memoir generation). Optional: pandas, matplotlib, reportlab for reports. Install via OSGeo4W Shell: python -m pip install python-docx pandas matplotlib reportlab. RTKLIB binaries are required separately for GNSS processing.
+    Designed for forestry, cadastre, and topography professionals in Peru and Latin America.
+
+tracker=https://github.com/YuriCaller/yf-gis-amazonia-tools/issues
+repository=https://github.com/YuriCaller/yf-gis-amazonia-tools
+homepage=https://github.com/YuriCaller/yf-gis-amazonia-tools
+
+category=Plugins
+icon=icons/main_icon.png
+license=GPL-3.0-or-later
+
+experimental=False
+deprecated=False
+server=False
+hasProcessingProvider=no
+
+tags=amazonia,peru,cadastre,cadastral,surveying,topography,gnss,ppk,ppp,rtklib,geodesy,memoria descriptiva,atlas,word,docx,agroforestry,forestry,saf,attribute search,azimuth,vertices,coordinates,polygon,excel
+
+changelog=Version 1.0.0 (2026-04-13):
+ - Initial unified release integrating six previously separate plugins.
+ - Top-level menu YF GIS Amazonia with thematic submenus: Cadastral, Geodesy/GNSS, Agroforestry, Search.
+ - Memoria Descriptiva v3.2: three modes (single polygon, full atlas, atlas by selection), auto-detects adjacent layers for neighbor identification.
+ - Segmenter: delegates to YF Tools Plus segmentator tab to avoid code duplication.
+ - YF Tools Plus v2.3: full multipart polygon support, Excel/CSV import, configurable output names.
+ - GNSS Post-Process v2.0: RTKLIB integration, strict geodetic validation, IGN Peru report format, PDF output.
+ - SAF Generator v2.1: six spatial distribution methods, custom row orientation, unique plant identifiers.
+ - Attribute Search v1.1: fixed SQL injection vulnerability, replaced deprecated legendInterface() API, conditional imports for optional dependencies.
+ - Core infrastructure: lazy-loaded tool registry, PyQt5/PyQt6 compatibility layer, shared CRS utilities, unified logger.
