@@ -3,7 +3,7 @@ name=YF GIS Amazonia Tools
 qgisMinimumVersion=3.22
 qgisMaximumVersion=3.99
 description=Professional GIS toolkit for cadastral regularization, surveying, GNSS post-processing and agroforestry management in the Peruvian Amazon.
-version=1.0.0
+version=1.0.1
 author=Yuri Fabian Caller Cordova
 email=yuricaller@gmail.com
 
@@ -15,9 +15,9 @@ about=Unified plugin integrating six specialized tools for Peruvian Amazon surve
     REQUIREMENTS: python-docx (required for memoir generation). Optional: pandas, matplotlib, reportlab for reports. Install via OSGeo4W Shell: python -m pip install python-docx pandas matplotlib reportlab. RTKLIB binaries are required separately for GNSS processing.
     Designed for forestry, cadastre, and topography professionals in Peru and Latin America.
 
-tracker=https://github.com/YuriCaller/yf-gis-amazonia-tools/issues
-repository=https://github.com/YuriCaller/yf-gis-amazonia-tools
-homepage=https://github.com/YuriCaller/yf-gis-amazonia-tools
+tracker=https://github.com/YuriCaller/YF_GIS_AMAZONIA/issues
+repository=https://github.com/YuriCaller/YF_GIS_AMAZONIA
+homepage=https://github.com/YuriCaller/YF_GIS_AMAZONIA
 
 category=Plugins
 icon=icons/main_icon.png
@@ -30,7 +30,11 @@ hasProcessingProvider=no
 
 tags=amazonia,peru,cadastre,cadastral,surveying,topography,gnss,ppk,ppp,rtklib,geodesy,memoria descriptiva,atlas,word,docx,agroforestry,forestry,saf,attribute search,azimuth,vertices,coordinates,polygon,excel
 
-changelog=Version 1.0.0 (2026-04-13):
+changelog=Version 1.0.1 (2026-04-14):
+ - Security: validated URL scheme (http/https only) in RTKLIB installer to prevent use of file:// or custom schemes (Bandit B310).
+ - No functional changes.
+
+ Version 1.0.0 (2026-04-13):
  - Initial unified release integrating six previously separate plugins.
  - Top-level menu YF GIS Amazonia with thematic submenus: Cadastral, Geodesy/GNSS, Agroforestry, Search.
  - Memoria Descriptiva v3.2: three modes (single polygon, full atlas, atlas by selection), auto-detects adjacent layers for neighbor identification.

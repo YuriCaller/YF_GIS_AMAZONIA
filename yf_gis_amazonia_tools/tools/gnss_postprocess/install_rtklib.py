@@ -20,6 +20,14 @@ import shutil
 import zipfile
 import tarfile
 import urllib.request
+from urllib.parse import urlparse
+
+# Esquemas permitidos para la descarga. Restringir a http/https evita que
+# urllib.request.urlretrieve pueda ser usado con esquemas como file://
+# (que leerían archivos locales arbitrarios) o ftp://. Esto cierra la
+# advertencia B310 de Bandit y es buena práctica de seguridad aunque las
+# URLs sean hardcodeadas.
+ALLOWED_SCHEMES = ('http', 'https')
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 BIN_DIR    = os.path.join(PLUGIN_DIR, 'rtklib_bin')
@@ -74,7 +82,15 @@ def install():
 
     tmp = os.path.join(BIN_DIR, '_tmp_rtklib_download')
     try:
-        urllib.request.urlretrieve(info['url'], tmp, reporthook=_progress)
+        # Validar esquema antes de descargar (cierra Bandit B310)
+        parsed = urlparse(info['url'])
+        if parsed.scheme not in ALLOWED_SCHEMES:
+            raise ValueError(
+                f'Esquema de URL no permitido: "{parsed.scheme}". '
+                f'Solo se aceptan: {", ".join(ALLOWED_SCHEMES)}'
+            )
+        # El esquema de URL fue validado arriba (solo http/https permitidos)
+        urllib.request.urlretrieve(info['url'], tmp, reporthook=_progress)  # nosec B310
         print()  # nueva línea tras la barra
     except Exception as ex:
         print(f'\n❌ Error descargando: {ex}')
