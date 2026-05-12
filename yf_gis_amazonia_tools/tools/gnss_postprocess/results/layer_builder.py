@@ -121,6 +121,98 @@ class LayerBuilder:
         self._apply_symbology(layer)
         return layer
 
+
+    # ══════════════════════════════════════════════════
+    # PUNTO PROMEDIADO (COORDENADA CORREGIDA FINAL)
+    # ══════════════════════════════════════════════════
+    def build_averaged_layer(self, stats: PosStats,
+                              project_name: str = '') -> QgsVectorLayer:
+        """Genera UN solo punto: la coordenada corregida promediada."""
+        p = self.params
+        bc = p.base_coords
+        fix_ep = [e for e in stats.epochs if e.q == 1]
+        flt_ep = [e for e in stats.epochs if e.q == 2]
+        if len(fix_ep) >= 5:
+            best, q_used, q_label = fix_ep, 1, 'FIX'
+        elif flt_ep:
+            best, q_used, q_label = flt_ep, 2, 'FLOAT'
+        elif stats.epochs:
+            best, q_used, q_label = stats.epochs, 5, 'SINGLE'
+        else:
+            return None
+        n = len(best)
+        lat_avg = sum(e.lat for e in best) / n
+        lon_avg = sum(e.lon for e in best) / n
+        h_avg   = sum(e.h for e in best) / n
+        lat_std_m = math.sqrt(sum((e.lat - lat_avg)**2 for e in best) / n) * 111320
+        lon_std_m = math.sqrt(sum((e.lon - lon_avg)**2 for e in best) / n) * 111320 * math.cos(math.radians(lat_avg))
+        h_std     = math.sqrt(sum((e.h - h_avg)**2 for e in best) / n)
+        sdn_avg = sum(e.sdn for e in best) / n
+        sde_avg = sum(e.sde for e in best) / n
+        sdu_avg = sum(e.sdu for e in best) / n
+        ns_avg  = sum(e.ns for e in best) / n
+        try:
+            este, norte, _ = self._conv.geo_to_utm(lat_avg, lon_avg)
+        except Exception:
+            este, norte = 0.0, 0.0
+        base_nombre = getattr(bc, 'fuente', 'N/A') if bc else 'N/A'
+        base_corregida = 'SI' if (bc and bc.fue_corregida) else 'NO'
+        layer = QgsVectorLayer('Point?crs=EPSG:4326',
+                               f'{project_name}_GNSS_corregido', 'memory')
+        pr = layer.dataProvider()
+        pr.addAttributes([
+            QgsField('nombre',          QVariant.String),
+            QgsField('lat_dd',          QVariant.Double),
+            QgsField('lon_dd',          QVariant.Double),
+            QgsField('este',            QVariant.Double),
+            QgsField('norte',           QVariant.Double),
+            QgsField('altura_elip',     QVariant.Double),
+            QgsField('precision_h',     QVariant.Double),
+            QgsField('precision_v',     QVariant.Double),
+            QgsField('sigma_norte_m',   QVariant.Double),
+            QgsField('sigma_este_m',    QVariant.Double),
+            QgsField('sigma_altura_m',  QVariant.Double),
+            QgsField('rtklib_sdn',      QVariant.Double),
+            QgsField('rtklib_sde',      QVariant.Double),
+            QgsField('rtklib_sdu',      QVariant.Double),
+            QgsField('calidad',         QVariant.String),
+            QgsField('q',               QVariant.Int),
+            QgsField('n_epocas_total',  QVariant.Int),
+            QgsField('n_epocas_usadas', QVariant.Int),
+            QgsField('n_fix',           QVariant.Int),
+            QgsField('n_float',         QVariant.Int),
+            QgsField('pct_fix',         QVariant.Double),
+            QgsField('sat_promedio',    QVariant.Double),
+            QgsField('metodo',          QVariant.String),
+            QgsField('base_nombre',     QVariant.String),
+            QgsField('base_corregida',  QVariant.String),
+        ])
+        layer.updateFields()
+        feat = QgsFeature()
+        feat.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(lon_avg, lat_avg)))
+        feat.setAttributes([
+            project_name,
+            round(lat_avg, 10), round(lon_avg, 10),
+            round(este, 3), round(norte, 3), round(h_avg, 4),
+            round(math.sqrt(sdn_avg**2 + sde_avg**2), 4), round(sdu_avg, 4),
+            round(lat_std_m, 4), round(lon_std_m, 4), round(h_std, 4),
+            round(sdn_avg, 5), round(sde_avg, 5), round(sdu_avg, 5),
+            q_label, q_used,
+            len(stats.epochs), n, len(fix_ep), len(flt_ep),
+            round(len(fix_ep) / len(stats.epochs) * 100, 1) if stats.epochs else 0.0,
+            round(ns_avg, 1), p.mode.upper(), base_nombre, base_corregida,
+        ])
+        pr.addFeatures([feat])
+        layer.updateExtents()
+        color = '#4CAF50' if q_used == 1 else '#FF9800' if q_used == 2 else '#F44336'
+        sym = QgsMarkerSymbol.createSimple({
+            'name': 'circle', 'color': color,
+            'size': '5', 'outline_color': '#333', 'outline_width': '0.5'
+        })
+        layer.renderer().setSymbol(sym)
+        return layer
+
+
     # ══════════════════════════════════════════════
     # CAPA DE TRAYECTORIA
     # ══════════════════════════════════════════════

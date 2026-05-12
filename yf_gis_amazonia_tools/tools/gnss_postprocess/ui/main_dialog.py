@@ -116,19 +116,31 @@ class GNSSMainDialog(QWidget):
         # Rover
         g_rover = QGroupBox('Rover')
         g_rover_lay = QFormLayout(g_rover)
-        self.ed_rover  = self._file_field(g_rover_lay, 'RINEX Obs (.obs/.rnx):',
-                                           'RINEX Obs (*.obs *.rnx *.OBS *.RNX)')
-        self.ed_nav    = self._file_field(g_rover_lay, 'Nav GPS (.nav/.rnx):',
-                                           'RINEX Nav (*.nav *.rnx *.NAV *.RNX)')
-        self.ed_gnav   = self._file_field(g_rover_lay, 'Nav GLONASS (.gnav):',
-                                           'GLONASS Nav (*.gnav *.GNAV)', optional=True)
+
+        # Filtros RINEX expandidos: incluyen extensiones por año (.26o, .25n, etc.)
+        # Patrón *.*o captura .obs, .26o, .25o, .24o, etc.
+        # Patrón *.*n captura .nav, .26n, .25n, .24n, etc.
+        _FILT_OBS = 'RINEX Obs (*.*o *.*O *.obs *.OBS *.rnx *.RNX);;Todos (*.*)'
+        _FILT_NAV = 'RINEX Nav (*.*n *.*N *.*l *.*L *.*g *.*G *.*p *.*P *.nav *.NAV *.rnx *.RNX *.gnav *.GNAV);;Todos (*.*)'
+        _FILT_GNAV = 'GLONASS Nav (*.*g *.*G *.gnav *.GNAV *.rnx *.RNX);;Todos (*.*)'
+
+        self.ed_rover  = self._file_field(g_rover_lay,
+            'RINEX Obs (.obs/.26o/.rnx):', _FILT_OBS)
+        self.ed_nav    = self._file_field(g_rover_lay,
+            'Nav GPS (.nav/.26n/.rnx):', _FILT_NAV)
+        self.ed_gnav   = self._file_field(g_rover_lay,
+            'Nav GLONASS (.gnav/.26g):', _FILT_GNAV, optional=True)
+
+        # Auto-detectar nav cuando se selecciona rover
+        self.ed_rover.textChanged.connect(self._auto_detect_nav)
+
         lay.addWidget(g_rover)
 
         # Base RINEX (PPK)
         self.g_base_rinex = QGroupBox('Base — RINEX (PPK)')
         gb_lay = QFormLayout(self.g_base_rinex)
-        self.ed_base_rinex = self._file_field(gb_lay, 'RINEX Base (.obs/.rnx):',
-                                               'RINEX Obs (*.obs *.rnx *.OBS *.RNX)')
+        self.ed_base_rinex = self._file_field(gb_lay,
+            'RINEX Base (.obs/.26o/.rnx):', _FILT_OBS)
         lay.addWidget(self.g_base_rinex)
 
         # Archivos precisos (PPP)
@@ -483,6 +495,82 @@ class GNSSMainDialog(QWidget):
         self.g_base_rinex.setVisible(self.rb_ppk.isChecked())
         self.g_precise.setVisible(self.rb_ppp.isChecked())
 
+    def _auto_detect_nav(self, rover_path):
+        """Auto-detect navigation file when rover observation file is selected.
+
+        RINEX naming convention:
+          Observation: SSSS0910.26o  or  SSSS00XXX_R_20260910000_01D_30S_MO.rnx
+          Navigation:  SSSS0910.26n  or  BRDC00IGS_R_20260910000_01D_MN.rnx
+                       SSSS0910.26l  (GLONASS)
+                       SSSS0910.26g  (Galileo)
+                       SSSS0910.26p  (mixed/BeiDou)
+
+        Legacy:       *.obs → *.nav
+        Year-based:   *.*o  → *.*n, *.*l, *.*g, *.*p
+        RINEX3 long:  *_MO.rnx → *_MN.rnx (GPS nav)
+        """
+        if not rover_path or not os.path.isfile(rover_path):
+            return
+
+        # Don't overwrite if nav is already set
+        if self.ed_nav.text() and os.path.isfile(self.ed_nav.text()):
+            return
+
+        rover_dir = os.path.dirname(rover_path)
+        rover_base = os.path.basename(rover_path)
+        rover_name, rover_ext = os.path.splitext(rover_base)
+
+        nav_candidates = []
+
+        # Case 1: Year-based extensions (.26o → .26n, .26l, .26g, .26p)
+        if len(rover_ext) >= 3 and rover_ext[-1].lower() == 'o':
+            year_prefix = rover_ext[:-1]  # e.g., ".26"
+            for nav_char in ['n', 'N', 'l', 'L', 'g', 'G', 'p', 'P']:
+                nav_candidates.append(rover_name + year_prefix + nav_char)
+
+        # Case 2: Legacy (.obs → .nav)
+        if rover_ext.lower() == '.obs':
+            nav_candidates.extend([
+                rover_name + '.nav', rover_name + '.NAV',
+                rover_name + '.gnav', rover_name + '.GNAV',
+            ])
+
+        # Case 3: RINEX 3 long name (_MO.rnx → _MN.rnx, _GN.rnx)
+        if rover_ext.lower() == '.rnx' and '_MO' in rover_name:
+            for suffix in ['_MN', '_GN', '_EN', '_CN', '_JN']:
+                nav_candidates.append(rover_name.replace('_MO', suffix) + '.rnx')
+                nav_candidates.append(rover_name.replace('_MO', suffix) + '.RNX')
+
+        # Case 4: Also look for broadcast files (BRDC*) in same folder
+        for f in os.listdir(rover_dir):
+            fl = f.lower()
+            if fl.startswith('brdc') and (fl.endswith('.rnx') or fl.endswith('n')
+                    or fl.endswith('l') or fl.endswith('g') or fl.endswith('p')):
+                nav_candidates.append(f)
+
+        # Try each candidate
+        nav_found = None
+        gnav_found = None
+        for cand in nav_candidates:
+            full = os.path.join(rover_dir, cand)
+            if os.path.isfile(full):
+                ext_low = os.path.splitext(cand)[1].lower()
+                # GLONASS nav → ed_gnav
+                if ext_low.endswith('g') or ext_low == '.gnav':
+                    if not gnav_found:
+                        gnav_found = full
+                # GPS/mixed nav → ed_nav
+                elif not nav_found:
+                    nav_found = full
+
+        if nav_found:
+            self.ed_nav.setText(nav_found)
+            self._log(f'🔍 Nav auto-detectado: {os.path.basename(nav_found)}', 'ok')
+
+        if gnav_found and not self.ed_gnav.text():
+            self.ed_gnav.setText(gnav_found)
+            self._log(f'🔍 GLONASS nav auto-detectado: {os.path.basename(gnav_found)}', 'ok')
+
     def _sync_base_format(self):
         self.g_utm_form.setVisible(self.rb_utm.isChecked())
         self.g_dms_form.setVisible(self.rb_dms.isChecked())
@@ -650,6 +738,22 @@ class GNSSMainDialog(QWidget):
                 )
                 QgsProject.instance().addMapLayer(tray)
 
+            # Punto promediado (coordenada corregida final)
+            avg_layer = builder.build_averaged_layer(
+                self._last_stats, self._last_params.project_name or 'GNSS'
+            )
+            if avg_layer:
+                QgsProject.instance().addMapLayer(avg_layer)
+                self._log(
+                    f'\u2605 Coordenada corregida: '
+                    f'{avg_layer.getFeature(1)["calidad"]} | '
+                    f'Lat={avg_layer.getFeature(1)["lat_dd"]:.10f} '
+                    f'Lon={avg_layer.getFeature(1)["lon_dd"]:.10f} '
+                    f'h={avg_layer.getFeature(1)["altura_elip"]:.4f}m | '
+                    f'{avg_layer.getFeature(1)["n_epocas_usadas"]} epocas usadas',
+                    'ok'
+                )
+
             # Exportaciones GIS
             fmts = []
             if self.chk_gpkg.isChecked():    fmts.append('gpkg')
@@ -661,6 +765,15 @@ class GNSSMainDialog(QWidget):
                                                self._last_params.out_prefix, fmts)
                 for fmt, path in results.items():
                     self._log(f'💾 {fmt.upper()}: {path}', 'ok')
+
+                # Exportar punto corregido
+                if avg_layer:
+                    avg_res = builder.export_layer(
+                        avg_layer, self._last_params.out_dir,
+                        self._last_params.out_prefix + '_corregido', fmts
+                    )
+                    for fmt2, path2 in avg_res.items():
+                        self._log(f'CORREGIDO {fmt2.upper()}: {path2}', 'ok')
 
             self.btn_report.setEnabled(True)
             self.progress.setValue(100)

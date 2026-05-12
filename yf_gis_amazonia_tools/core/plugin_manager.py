@@ -2,6 +2,11 @@
 """
 Plugin Manager - Orchestrates all YF GIS Amazonia tools.
 
+v2.0 changes:
+- Added "Comparación visual" submenu with Swipe tool
+- Added "Navegación" submenu with Go-To tool
+- Enhanced "Acerca" dialog with TUCSA branding and services info
+
 Handles menu creation, tool registration, and lifecycle management.
 Each tool is a self-contained module under tools/ that registers itself
 via the ToolRegistry.
@@ -10,13 +15,12 @@ via the ToolRegistry.
 import os
 from qgis.PyQt.QtWidgets import QAction, QMenu
 from qgis.PyQt.QtGui import QIcon
-from qgis.core import QgsApplication
 
 from .tool_registry import ToolRegistry
 from .logger import log_info, log_error
 
 # Plugin version
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 
 class YFGISAmazonia:
@@ -41,13 +45,10 @@ class YFGISAmazonia:
         log_info(f"Iniciando YF GIS Amazonia Tools v{__version__}")
 
         # Create the top-level menu in the menu bar
-        # IMPORTANT: Do NOT set an icon on the top-level QMenu — QGIS would
-        # render it as an icon-only button instead of a text tab like
-        # "Vectorial", "Ráster", etc. Icons only go on submenus and actions.
         menu_bar = self.iface.mainWindow().menuBar()
         self.menu = QMenu(self.MENU_NAME, menu_bar)
 
-        # Insert before the Help menu so it appears as a proper tab
+        # Insert before Help so it appears as a tab like Vectorial, Ráster, etc.
         help_menu_action = None
         for action in menu_bar.actions():
             menu_obj = action.menu()
@@ -62,13 +63,11 @@ class YFGISAmazonia:
         else:
             menu_bar.addMenu(self.menu)
 
-        # Create toolbar
+        # Toolbar
         self.toolbar = self.iface.addToolBar("YF GIS Amazonia Tools")
         self.toolbar.setObjectName("YFGISAmazonia")
 
-        # ----------------------------------------------------------
-        # Register tool groups (each creates a submenu)
-        # ----------------------------------------------------------
+        # Register all tools
         self._register_tools()
 
         # Separator + About
@@ -86,17 +85,14 @@ class YFGISAmazonia:
         """Clean up: unload all tools, remove menu and toolbar."""
         log_info("Descargando YF GIS Amazonia Tools")
 
-        # Unload every registered tool
         self.registry.unload_all()
 
-        # Remove top-level menu
         if self.menu:
             menu_bar = self.iface.mainWindow().menuBar()
             menu_bar.removeAction(self.menu.menuAction())
             self.menu.deleteLater()
             self.menu = None
 
-        # Remove toolbar
         if self.toolbar:
             del self.toolbar
             self.toolbar = None
@@ -108,7 +104,7 @@ class YFGISAmazonia:
     # ------------------------------------------------------------------
 
     def _register_tools(self):
-        """Register all tool modules grouped into submenus."""
+        """Register all tool modules grouped into thematic submenus."""
 
         # ── Catastral ──────────────────────────────────────────────
         catastral_menu = self.menu.addMenu(
@@ -116,8 +112,7 @@ class YFGISAmazonia:
         )
 
         self.registry.register(
-            menu=catastral_menu,
-            toolbar=self.toolbar,
+            menu=catastral_menu, toolbar=self.toolbar,
             tool_id="memoria_descriptiva",
             label="Memoria Descriptiva",
             icon="memoria_descriptiva.png",
@@ -126,8 +121,7 @@ class YFGISAmazonia:
         )
 
         self.registry.register(
-            menu=catastral_menu,
-            toolbar=None,
+            menu=catastral_menu, toolbar=None,
             tool_id="segmentador",
             label="Segmentador de Parcelas",
             icon="segmentador.png",
@@ -135,8 +129,7 @@ class YFGISAmazonia:
         )
 
         self.registry.register(
-            menu=catastral_menu,
-            toolbar=None,
+            menu=catastral_menu, toolbar=None,
             tool_id="yf_tools_plus",
             label="YF Tools Plus",
             icon="yf_tools.png",
@@ -149,8 +142,7 @@ class YFGISAmazonia:
         )
 
         self.registry.register(
-            menu=gnss_menu,
-            toolbar=self.toolbar,
+            menu=gnss_menu, toolbar=self.toolbar,
             tool_id="gnss_postprocess",
             label="Post-Proceso PPK/PPP",
             icon="gnss.png",
@@ -164,8 +156,7 @@ class YFGISAmazonia:
         )
 
         self.registry.register(
-            menu=agro_menu,
-            toolbar=self.toolbar,
+            menu=agro_menu, toolbar=self.toolbar,
             tool_id="saf_generator",
             label="SAF Generator",
             icon="saf.png",
@@ -179,12 +170,39 @@ class YFGISAmazonia:
         )
 
         self.registry.register(
-            menu=search_menu,
-            toolbar=self.toolbar,
+            menu=search_menu, toolbar=self.toolbar,
             tool_id="attribute_search",
             label="Búsqueda Avanzada de Atributos",
             icon="search.png",
             module_path="tools.attribute_search",
+            add_to_toolbar=True,
+        )
+
+        # ── Comparación Visual (NEW v2.0) ─────────────────────────
+        compare_menu = self.menu.addMenu(
+            self._icon("swipe.png"), "Comparación Visual"
+        )
+
+        self.registry.register(
+            menu=compare_menu, toolbar=self.toolbar,
+            tool_id="swipe",
+            label="Swipe Tool",
+            icon="swipe.png",
+            module_path="tools.swipe",
+            add_to_toolbar=True,
+        )
+
+        # ── Navegación (NEW v2.0) ─────────────────────────────────
+        nav_menu = self.menu.addMenu(
+            self._icon("goto.png"), "Navegación"
+        )
+
+        self.registry.register(
+            menu=nav_menu, toolbar=self.toolbar,
+            tool_id="goto",
+            label="Go-To (Ir a coordenadas)",
+            icon="goto.png",
+            module_path="tools.goto",
             add_to_toolbar=True,
         )
 
@@ -200,19 +218,7 @@ class YFGISAmazonia:
         return QIcon()
 
     def _show_about(self):
-        """Show the About dialog."""
-        from qgis.PyQt.QtWidgets import QMessageBox
-
-        QMessageBox.information(
-            self.iface.mainWindow(),
-            "Acerca de YF GIS Amazonia Tools",
-            f"<b>YF GIS Amazonia Tools</b> v{__version__}<br><br>"
-            f"Suite profesional de herramientas GIS para<br>"
-            f"saneamiento físico legal, catastro rural,<br>"
-            f"geodesia y gestión agroforestal.<br><br>"
-            f"<b>Autor:</b> Yuri Fabian Caller Córdova<br>"
-            f"<b>CIP:</b> 214377<br>"
-            f"<b>Empresa:</b> Training Universal Company SAC<br>"
-            f"<b>Web:</b> <a href='https://gis-amazonia.pe'>gis-amazonia.pe</a><br><br>"
-            f"© 2025 TUCSA — Todos los derechos reservados",
-        )
+        """Show the enhanced About dialog with TUCSA branding."""
+        from .about_dialog import AboutDialog
+        dlg = AboutDialog(self.iface.mainWindow(), __version__, self.plugin_dir)
+        dlg.exec_()

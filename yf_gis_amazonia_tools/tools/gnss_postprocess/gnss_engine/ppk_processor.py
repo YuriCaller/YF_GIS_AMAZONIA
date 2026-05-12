@@ -125,44 +125,130 @@ class PPKProcessor(QThread):
     # COMANDO
     # ──────────────────────────────────────────────
     def _build_command(self, binary: str, conf: str, out_pos: str) -> list:
+        """Construye el comando para rnx2rtkp.
+
+        Sintaxis de rnx2rtkp para PPK (modo relativo/diferencial):
+            rnx2rtkp -k config.conf -o output.pos rover.obs base.obs nav.nav [gnav]
+
+        IMPORTANTE:
+        - El archivo RINEX base va como SEGUNDO archivo posicional (después del rover),
+          NO con el flag -r (que es para coordenadas ECEF manuales).
+        - El orden de archivos posicionales es: rover_obs, base_obs, nav_file [, gnav_file]
+        """
         p = self.params
-        cmd = [binary, '-k', conf, '-o', out_pos, p.rinex_rover, p.nav_file]
+        # Archivos posicionales: rover, base, nav (en ese orden)
+        cmd = [binary, '-k', conf, '-o', out_pos]
+
+        # 1) Rover observation file (obligatorio)
+        cmd.append(p.rinex_rover)
+
+        # 2) Base observation file (obligatorio en PPK - va como 2do posicional)
+        if p.rinex_base and os.path.isfile(p.rinex_base):
+            cmd.append(p.rinex_base)
+
+        # 3) Navigation file(s)
+        cmd.append(p.nav_file)
 
         if p.gnav_file and os.path.isfile(p.gnav_file):
             cmd.append(p.gnav_file)
 
-        # Base RINEX
-        if p.rinex_base and os.path.isfile(p.rinex_base):
-            cmd += ['-r', p.rinex_base]
-
+        # CRÍTICO: normalizar rutas — RTKLIB falla con barras mixtas / y \
+        cmd = [os.path.normpath(c) if (os.sep in c or '/' in c) else c for c in cmd]
         return cmd
 
     def _execute(self, cmd: list) -> bool:
+        """Ejecuta rnx2rtkp.
+
+        Usa subprocess.run con la lista directamente (shell=False, default seguro).
+        Python en Windows cita automáticamente argumentos con espacios cuando
+        recibe una lista. Esto evita el bug Bandit B602 (subprocess_popen_with_shell_equals_true).
+
+        Para logging, usamos subprocess.list2cmdline() que muestra cómo Windows
+        verá el comando sin necesidad de shell=True.
+        """
         try:
-            proc = subprocess.Popen(
+            # Log del comando de forma segura (no requiere shell=True)
+            cmd_display = subprocess.list2cmdline(cmd)
+            self.log.emit(f'  [CMD] {cmd_display}', 'info')
+
+            # subprocess.run con lista + shell=False (default) es:
+            #  - Seguro (sin inyección de shell)
+            #  - Compatible con rutas con espacios (Python cita automáticamente)
+            #  - Multiplataforma (Windows y Linux funcionan idéntico)
+            result = subprocess.run(
                 cmd,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding='utf-8', errors='replace'
+                capture_output=True,
+                text=True, encoding='utf-8', errors='replace',
+                timeout=600
             )
-            for line in proc.stdout:
-                line = line.rstrip()
-                if line:
-                    level = 'error' if 'error' in line.lower() else 'info'
-                    self.log.emit(f'  {line}', level)
-            proc.wait()
-            if proc.returncode != 0:
-                self.log.emit(f'❌ rnx2rtkp retornó código {proc.returncode}', 'error')
+
+            # Log output (stderr contiene el progreso de RTKLIB)
+            output = (result.stdout or '') + (result.stderr or '')
+            output_lines = output.strip().split('\n') if output.strip() else []
+
+            for line in output_lines:
+                line = line.strip()
+                if not line:
+                    continue
+                # Solo loguear líneas importantes, no cada época
+                if line.startswith('processing'):
+                    continue  # Saltar líneas de progreso (hay miles)
+                level = 'error' if 'error' in line.lower() else 'info'
+                self.log.emit(f'  {line}', level)
+
+            # Resumen de procesamiento
+            proc_count = sum(1 for l in output_lines if l.strip().startswith('processing'))
+            if proc_count > 0:
+                self.log.emit(f'  ⏱ {proc_count} épocas procesadas por RTKLIB', 'info')
+
+            # Detectar si RTKLIB imprimió el help en vez de procesar
+            if any('usage: rnx2rtkp' in l for l in output_lines):
+                self.log.emit(
+                    '❌ RTKLIB mostró la ayuda en vez de procesar. '
+                    'Problema con los argumentos del comando.',
+                    'error'
+                )
                 return False
+
+            # Detectar "no obs data"
+            if any('no obs data' in l.lower() for l in output_lines):
+                self.log.emit(
+                    '❌ RTKLIB no pudo leer datos de observación. '
+                    'Verifique que las rutas de archivos no tengan caracteres especiales.',
+                    'error'
+                )
+                return False
+
+            if result.returncode != 0:
+                self.log.emit(f'❌ rnx2rtkp retornó código {result.returncode}', 'error')
+                return False
+
             return True
+
+        except subprocess.TimeoutExpired:
+            self.log.emit('❌ RTKLIB excedió el tiempo límite (10 min)', 'error')
+            return False
         except Exception as ex:
             self.log.emit(f'❌ Error ejecutando RTKLIB: {ex}', 'error')
             return False
 
     def _resolve_binary(self) -> str:
         exe = 'rnx2rtkp.exe' if platform.system() == 'Windows' else 'rnx2rtkp'
-        bundled = os.path.join(self.plugin_dir, 'rtklib_bin', exe)
-        if os.path.isfile(bundled):
-            if platform.system() != 'Windows':
-                os.chmod(bundled, os.stat(bundled).st_mode | stat.S_IEXEC)
-            return bundled
+
+        # Buscar en múltiples ubicaciones:
+        # 1. plugin_dir/rtklib_bin/ (raíz del plugin)
+        # 2. plugin_dir/tools/gnss_postprocess/rtklib_bin/ (subdirectorio del módulo GNSS)
+        # 3. Junto a este archivo (gnss_engine/../rtklib_bin/)
+        search_paths = [
+            os.path.join(self.plugin_dir, 'rtklib_bin', exe),
+            os.path.join(self.plugin_dir, 'tools', 'gnss_postprocess', 'rtklib_bin', exe),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'rtklib_bin', exe),
+        ]
+
+        for path in search_paths:
+            if os.path.isfile(path):
+                if platform.system() != 'Windows':
+                    os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
+                return path
+
         return shutil.which('rnx2rtkp') or ''

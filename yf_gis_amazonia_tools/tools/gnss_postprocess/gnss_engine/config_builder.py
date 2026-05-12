@@ -62,13 +62,16 @@ class ConfigBuilder:
     """
 
     # Mapeo interno modo → código RTKLIB pos1-posmode
+    # Referencia: RTKLIB manual 2.4.2 sección 5.2
+    # 0=single, 1=dgps, 2=kinematic, 3=static, 4=movbase,
+    # 5=fixed, 6=ppp-kinematic, 7=ppp-static
     _POSMODE = {
-        'static':        0,
-        'kinematic':     1,
-        'movbase':       2,
-        'fixed':         3,
-        'ppp-static':    4,
-        'ppp-kinematic': 5,
+        'static':        3,
+        'kinematic':     2,
+        'movbase':       4,
+        'fixed':         5,
+        'ppp-static':    7,
+        'ppp-kinematic': 6,
     }
     _SOLTYPE = {
         'forward':  0,

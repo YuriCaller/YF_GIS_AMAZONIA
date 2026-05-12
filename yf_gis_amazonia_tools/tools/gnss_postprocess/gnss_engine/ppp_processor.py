@@ -103,33 +103,68 @@ class PPPProcessor(QThread):
         if p.ionex_file and os.path.isfile(p.ionex_file):
             cmd += ['-i', p.ionex_file]
 
+        # CRÍTICO: normalizar rutas — RTKLIB falla con barras mixtas / y \
+        cmd = [os.path.normpath(c) if (os.sep in c or '/' in c) else c for c in cmd]
         return cmd
 
     def _execute(self, cmd: list) -> bool:
         try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding='utf-8', errors='replace'
+            # Log seguro del comando (sin shell=True). list2cmdline muestra
+            # cómo Windows verá el comando con sus argumentos citados.
+            cmd_display = subprocess.list2cmdline(cmd)
+            self.log.emit(f'  [CMD] {cmd_display}', 'info')
+
+            # subprocess.run con lista + shell=False (default) es seguro
+            # y maneja correctamente rutas con espacios en Windows y Linux.
+            # Esto evita Bandit B602 (subprocess_popen_with_shell_equals_true).
+            result = subprocess.run(
+                cmd, capture_output=True,
+                text=True, encoding='utf-8', errors='replace',
+                timeout=600
             )
-            for line in proc.stdout:
-                line = line.rstrip()
-                if line:
-                    self.log.emit(f'  {line}', 'info')
-            proc.wait()
-            if proc.returncode != 0:
-                self.log.emit(f'❌ rnx2rtkp (PPP) código {proc.returncode}', 'error')
+
+            output = (result.stdout or '') + (result.stderr or '')
+            output_lines = output.strip().split('\n') if output.strip() else []
+
+            for line in output_lines:
+                line = line.strip()
+                if not line or line.startswith('processing'):
+                    continue
+                self.log.emit(f'  {line}', 'info')
+
+            proc_count = sum(1 for l in output_lines if l.strip().startswith('processing'))
+            if proc_count > 0:
+                self.log.emit(f'  ⏱ {proc_count} épocas procesadas', 'info')
+
+            if any('usage: rnx2rtkp' in l for l in output_lines):
+                self.log.emit('❌ RTKLIB mostró la ayuda. Revise argumentos.', 'error')
+                return False
+
+            if any('no obs data' in l.lower() for l in output_lines):
+                self.log.emit('❌ RTKLIB no pudo leer datos de observación.', 'error')
+                return False
+
+            if result.returncode != 0:
+                self.log.emit(f'❌ rnx2rtkp (PPP) código {result.returncode}', 'error')
                 return False
             return True
+        except subprocess.TimeoutExpired:
+            self.log.emit('❌ Tiempo límite excedido (10 min)', 'error')
+            return False
         except Exception as ex:
             self.log.emit(f'❌ {ex}', 'error')
             return False
 
     def _resolve_binary(self) -> str:
         exe = 'rnx2rtkp.exe' if platform.system() == 'Windows' else 'rnx2rtkp'
-        bundled = os.path.join(self.plugin_dir, 'rtklib_bin', exe)
-        if os.path.isfile(bundled):
-            if platform.system() != 'Windows':
-                os.chmod(bundled, os.stat(bundled).st_mode | stat.S_IEXEC)
-            return bundled
+        search_paths = [
+            os.path.join(self.plugin_dir, 'rtklib_bin', exe),
+            os.path.join(self.plugin_dir, 'tools', 'gnss_postprocess', 'rtklib_bin', exe),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'rtklib_bin', exe),
+        ]
+        for path in search_paths:
+            if os.path.isfile(path):
+                if platform.system() != 'Windows':
+                    os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
+                return path
         return shutil.which('rnx2rtkp') or ''
