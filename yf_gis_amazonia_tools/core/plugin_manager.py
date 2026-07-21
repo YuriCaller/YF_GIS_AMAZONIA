@@ -25,7 +25,22 @@ from .tool_registry import ToolRegistry
 from .logger import log_info, log_error
 
 # Plugin version
-__version__ = "2.0.0"
+def _leer_version():
+    """Lee la versión desde metadata.txt (fuente única de verdad)."""
+    try:
+        import os as _os
+        meta = _os.path.join(_os.path.dirname(_os.path.dirname(
+            _os.path.abspath(__file__))), "metadata.txt")
+        with open(meta, encoding="utf-8") as f:
+            for linea in f:
+                if linea.startswith("version="):
+                    return linea.split("=", 1)[1].strip()
+    except Exception:
+        logging.getLogger(__name__).debug("no version", exc_info=True)
+    return "?"
+
+
+__version__ = _leer_version()
 
 
 class YFGISAmazonia:

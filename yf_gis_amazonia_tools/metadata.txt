@@ -39,7 +39,6 @@ icon=icons/main_icon.png
 license=GPL-3.0-or-later
 
 experimental=False
-supportsQt6=True
 deprecated=False
 server=False
 hasProcessingProvider=no
@@ -47,6 +46,7 @@ hasProcessingProvider=no
 tags=amazonia,peru,cadastre,cadastral,surveying,topography,gnss,ppk,ppp,rtklib,geodesy,memoria descriptiva,atlas,word,docx,agroforestry,forestry,saf,attribute search,azimuth,vertices,coordinates,polygon,excel,swipe,compare,goto,navigate,smart labels,vector geometry,layout,rescaler,table style,title block,cajetin,batch export,layout tools,compositor,georeferencer,georeferencing,warp,tps,gcp,control points,raster,scanned plan,arcgis
 
 changelog=Version 3.0.3 (2026-07-16):
+ * Acerca de: enlace al sitio web oficial y version leida dinamicamente del metadata
  * Flake8: renombradas variables ambiguas restantes y marcados re-imports locales intencionales
 Version 3.0.2 (2026-07-16):
  * Calidad de codigo (Flake8): corregidos 2 bugs reales de nombres indefinidos (QgsFeatureRequest y matplotlib.pyplot no importados en generacion de reportes)

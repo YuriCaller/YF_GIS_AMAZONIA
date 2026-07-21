@@ -116,7 +116,7 @@ class AboutDialog(QDialog):
         web_btn = QPushButton("🌐  gis-amazonia.pe")
         web_btn.setMinimumHeight(32)
         web_btn.setStyleSheet(self._button_style("#2980b9", "#3498db"))
-        web_btn.clicked.connect(lambda: self._open_url("https://gis-amazonia.pe"))
+        web_btn.clicked.connect(lambda: self._open_url("https://yuricaller.github.io/gis-amazonia/"))
         contact_row.addWidget(web_btn)
 
         email_btn = QPushButton("✉  Contactar")
