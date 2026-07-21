@@ -109,7 +109,7 @@ class PPPProcessor(QThread):
 
     def _execute(self, cmd: list) -> bool:
         try:
-            # Log seguro del comando (sin shell=True). list2cmdline muestra
+            # Log seguro del comando (sin invocar shell). list2cmdline muestra
             # cómo Windows verá el comando con sus argumentos citados.
             cmd_display = subprocess.list2cmdline(cmd)
             self.log.emit(f'  [CMD] {cmd_display}', 'info')
@@ -117,7 +117,7 @@ class PPPProcessor(QThread):
             # subprocess.run con lista + shell=False (default) es seguro
             # y maneja correctamente rutas con espacios en Windows y Linux.
             # Esto evita Bandit B602 (subprocess_popen_with_shell_equals_true).
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 - RTKLIB, lista sin shell, ruta validada
                 cmd, capture_output=True,
                 text=True, encoding='utf-8', errors='replace',
                 timeout=600
@@ -132,15 +132,15 @@ class PPPProcessor(QThread):
                     continue
                 self.log.emit(f'  {line}', 'info')
 
-            proc_count = sum(1 for l in output_lines if l.strip().startswith('processing'))
+            proc_count = sum(1 for l in output_lines if l.strip().startswith('processing'))  # noqa: E741
             if proc_count > 0:
                 self.log.emit(f'  ⏱ {proc_count} épocas procesadas', 'info')
 
-            if any('usage: rnx2rtkp' in l for l in output_lines):
+            if any('usage: rnx2rtkp' in l for l in output_lines):  # noqa: E741
                 self.log.emit('❌ RTKLIB mostró la ayuda. Revise argumentos.', 'error')
                 return False
 
-            if any('no obs data' in l.lower() for l in output_lines):
+            if any('no obs data' in l.lower() for l in output_lines):  # noqa: E741
                 self.log.emit('❌ RTKLIB no pudo leer datos de observación.', 'error')
                 return False
 

@@ -12,14 +12,14 @@ TAG = "YF GIS Amazonia"
 
 def log_info(message):
     """Log an informational message."""
-    QgsMessageLog.logMessage(str(message), TAG, Qgis.Info)
+    QgsMessageLog.logMessage(str(message), TAG, Qgis.MessageLevel.Info)
 
 
 def log_warning(message):
     """Log a warning message."""
-    QgsMessageLog.logMessage(str(message), TAG, Qgis.Warning)
+    QgsMessageLog.logMessage(str(message), TAG, Qgis.MessageLevel.Warning)
 
 
 def log_error(message):
     """Log an error message."""
-    QgsMessageLog.logMessage(str(message), TAG, Qgis.Critical)
+    QgsMessageLog.logMessage(str(message), TAG, Qgis.MessageLevel.Critical)

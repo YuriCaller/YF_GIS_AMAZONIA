@@ -21,6 +21,8 @@
 """
 
 import os
+from qgis.PyQt.QtGui import QDesktopServices as __QDS
+from qgis.PyQt.QtCore import QUrl as __QURL
 import tempfile
 from datetime import datetime
 
@@ -145,7 +147,7 @@ class ReportPanel(QWidget):
         self.field_layout = QVBoxLayout(self.field_group)
         
         self.field_list = QListWidget()
-        self.field_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.field_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.field_layout.addWidget(self.field_list)
         
         self.field_buttons_layout = QHBoxLayout()
@@ -222,11 +224,11 @@ class ReportPanel(QWidget):
             self.progress_bar.setValue(90)
             
             # Try to import again
-            import docx
+            import docx  # noqa: F811
             from docx import Document
-            from docx.shared import Inches, Pt, RGBColor
+            from docx.shared import Inches, Pt, RGBColor  # noqa: F811
             from docx.enum.text import WD_ALIGN_PARAGRAPH
-            from docx.enum.table import WD_TABLE_ALIGNMENT
+            from docx.enum.table import WD_TABLE_ALIGNMENT  # noqa: F811
             
             self.progress_bar.setValue(100)
             
@@ -285,21 +287,21 @@ class ReportPanel(QWidget):
         # Add field names to list
         for field_name in sorted(field_names):
             item = QListWidgetItem(field_name)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked)
             self.field_list.addItem(item)
     
     def select_all_fields(self):
         """Select all fields in the list."""
         for i in range(self.field_list.count()):
             item = self.field_list.item(i)
-            item.setCheckState(Qt.Checked)
+            item.setCheckState(Qt.CheckState.Checked)
     
     def clear_field_selection(self):
         """Clear field selection."""
         for i in range(self.field_list.count()):
             item = self.field_list.item(i)
-            item.setCheckState(Qt.Unchecked)
+            item.setCheckState(Qt.CheckState.Unchecked)
     
     def browse_output_path(self):
         """Browse for output file path."""
@@ -352,7 +354,7 @@ class ReportPanel(QWidget):
         selected_fields = []
         for i in range(self.field_list.count()):
             item = self.field_list.item(i)
-            if item.checkState() == Qt.Checked:
+            if item.checkState() == Qt.CheckState.Checked:
                 selected_fields.append(item.text())
         
         if not selected_fields:
@@ -435,15 +437,7 @@ class ReportPanel(QWidget):
             )
             
             # Open the file
-            import subprocess
-            import sys
-            
-            if sys.platform == 'win32':
-                os.startfile(output_path)
-            elif sys.platform == 'darwin':
-                subprocess.call(['open', output_path])
-            else:
-                subprocess.call(['xdg-open', output_path])
+            __QDS.openUrl(__QURL.fromLocalFile(output_path))
         
         except Exception as e:
             QMessageBox.critical(
@@ -748,7 +742,7 @@ class ReportPanel(QWidget):
             geometry_paragraph.add_run(self.get_geometry_type_name(layer.geometryType()))
             geometry_paragraph.add_run("\n")
             
-            if layer.geometryType() == QgsWkbTypes.PolygonGeometry:
+            if layer.geometryType() == QgsWkbTypes.GeometryType.PolygonGeometry:
                 # Add area
                 area = geometry.area()
                 if area < 10000:
@@ -770,7 +764,7 @@ class ReportPanel(QWidget):
                 geometry_paragraph.add_run(f"Perímetro: ").bold = True
                 geometry_paragraph.add_run(perimeter_str)
             
-            elif layer.geometryType() == QgsWkbTypes.LineGeometry:
+            elif layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry:
                 # Add length
                 length = geometry.length()
                 if length < 1000:
@@ -781,7 +775,7 @@ class ReportPanel(QWidget):
                 geometry_paragraph.add_run(f"Longitud: ").bold = True
                 geometry_paragraph.add_run(length_str)
             
-            elif layer.geometryType() == QgsWkbTypes.PointGeometry:
+            elif layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry:
                 # Add coordinates
                 point = geometry.asPoint()
                 
@@ -933,6 +927,9 @@ class ReportPanel(QWidget):
             values = [item[1] for item in sorted_items]
             
             # Create chart
+            import matplotlib
+            matplotlib.use('Agg')  # backend sin GUI, seguro en QGIS
+            import matplotlib.pyplot as plt
             plt.figure(figsize=(8, 6))
             
             # Create bar chart
@@ -971,11 +968,11 @@ class ReportPanel(QWidget):
     
     def get_geometry_type_name(self, geometry_type):
         """Get human-readable name for geometry type."""
-        if geometry_type == QgsWkbTypes.PointGeometry:
+        if geometry_type == QgsWkbTypes.GeometryType.PointGeometry:
             return "Punto"
-        elif geometry_type == QgsWkbTypes.LineGeometry:
+        elif geometry_type == QgsWkbTypes.GeometryType.LineGeometry:
             return "Línea"
-        elif geometry_type == QgsWkbTypes.PolygonGeometry:
+        elif geometry_type == QgsWkbTypes.GeometryType.PolygonGeometry:
             return "Polígono"
         else:
             return "Desconocido"

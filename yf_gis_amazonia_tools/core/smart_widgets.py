@@ -46,7 +46,7 @@ class SmartDoubleSpinBox(QDoubleSpinBox):
     def keyEvent_paste(self):
         """Retorna una secuencia de paste para comparar con .matches()."""
         from qgis.PyQt.QtGui import QKeySequence
-        return QKeySequence.Paste
+        return QKeySequence.StandardKey.Paste
 
 
 class SmartSpinBox(QSpinBox):
@@ -55,7 +55,7 @@ class SmartSpinBox(QSpinBox):
 
     def keyPressEvent(self, event):
         from qgis.PyQt.QtGui import QKeySequence
-        if event.matches(QKeySequence.Paste):
+        if event.matches(QKeySequence.StandardKey.Paste):
             clipboard_text = QApplication.clipboard().text()
             pair = extract_number_pair(clipboard_text)
             if pair is not None:
@@ -72,7 +72,7 @@ class SmartLineEdit(QLineEdit):
 
     def keyPressEvent(self, event):
         from qgis.PyQt.QtGui import QKeySequence
-        if event.matches(QKeySequence.Paste):
+        if event.matches(QKeySequence.StandardKey.Paste):
             clipboard_text = QApplication.clipboard().text()
             pair = extract_number_pair(clipboard_text)
             if pair is not None:

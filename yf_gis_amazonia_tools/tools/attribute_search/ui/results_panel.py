@@ -20,6 +20,7 @@
  ***************************************************************************/
 """
 
+import logging
 import os
 import csv
 from io import BytesIO
@@ -38,10 +39,14 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
+try:
+    from qgis.PyQt.QtGui import QAction        # Qt6: QAction vive en QtGui
+except ImportError:
+    from qgis.PyQt.QtWidgets import QAction    # Qt5: QAction vive en QtWidgets
 from qgis.PyQt.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem,
     QPushButton, QComboBox, QCheckBox, QGroupBox, QRadioButton, QSplitter,
-    QToolButton, QMenu, QAction, QMessageBox, QFileDialog, QHeaderView,
+    QToolButton, QMenu, QMessageBox, QFileDialog, QHeaderView,
     QAbstractItemView, QTabWidget, QToolBar, QInputDialog, QLineEdit # Added QLineEdit
 )
 # Added pyqtSignal, QTimer, QVariant
@@ -94,7 +99,7 @@ class ResultsPanel(QWidget):
         self.results_toolbar = QToolBar()
         self.results_toolbar.setIconSize(QSize(16, 16))
         # --- Set style to show text beside icons ---
-        self.results_toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.results_toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         # --- End style setting ---
 
         # --- Added Restart Search Action ---
@@ -180,17 +185,17 @@ class ResultsPanel(QWidget):
         self.results_table = QTableWidget()
         self.results_table.setColumnCount(4)
         self.results_table.setHorizontalHeaderLabels(["Capa", "ID", "Campo", "Valor"])
-        self.results_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.results_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.results_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.results_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.results_table.setAlternatingRowColors(True)
         self.results_table.setSortingEnabled(True)
         # Make last column stretch, others resize to contents initially
-        self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self.results_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.results_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.results_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.results_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.results_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.results_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         
-        self.results_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.results_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.results_table.customContextMenuRequested.connect(self.show_context_menu)
         self.results_table.itemSelectionChanged.connect(self.on_selection_changed)
         
@@ -235,7 +240,7 @@ class ResultsPanel(QWidget):
             self.figure = None
             self.canvas = None
             no_mpl = QLabel("Visualización no disponible.\nInstale matplotlib: pip install matplotlib")
-            no_mpl.setAlignment(Qt.AlignCenter)
+            no_mpl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.visualization_layout.addWidget(no_mpl)
         
         # Add visualization tab
@@ -271,7 +276,7 @@ class ResultsPanel(QWidget):
             # Layer name
             layer_item = QTableWidgetItem(result["layer"].name())
             # Store the actual result dictionary in the first item for later retrieval
-            layer_item.setData(Qt.UserRole, result) 
+            layer_item.setData(Qt.ItemDataRole.UserRole, result) 
             self.results_table.setItem(i, 0, layer_item)
             
             # Feature ID
@@ -289,7 +294,7 @@ class ResultsPanel(QWidget):
         # Resize columns to content after populating
         self.results_table.resizeColumnsToContents()
         # Re-apply stretch to last column if needed
-        self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self.results_table.setSortingEnabled(True) # Re-enable sorting
     
     def update_field_combo(self):
@@ -382,14 +387,14 @@ class ResultsPanel(QWidget):
                 plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error generando gráfico: {e}", "AttributeSearch", Qgis.Warning)
+            QgsMessageLog.logMessage(f"Error generando gráfico: {e}", "AttributeSearch", Qgis.MessageLevel.Warning)
             ax.text(0.5, 0.5, "Error al generar gráfico", horizontalalignment="center", verticalalignment="center")
 
         # Adjust layout
         try:
             self.figure.tight_layout()
         except ValueError: # Avoid potential tight_layout errors with certain data
-            pass 
+            logging.getLogger(__name__).debug("suppressed", exc_info=True) 
         
         # Redraw canvas
         self.canvas.draw()
@@ -414,7 +419,7 @@ class ResultsPanel(QWidget):
             # Retrieve the stored result dictionary from the first column"s UserRole data
             result_item = self.results_table.item(row, 0)
             if result_item:
-                result_data = result_item.data(Qt.UserRole)
+                result_data = result_item.data(Qt.ItemDataRole.UserRole)
                 if result_data and isinstance(result_data, dict):
                     self.selected_features_info.append(result_data)
         
@@ -466,7 +471,7 @@ class ResultsPanel(QWidget):
                     valid_extent_found = True
             
             if layer_extent.isEmpty(): # Check if extent is still empty (no valid geometries)
-                 QgsMessageLog.logMessage(f"No se pudo obtener la extensión para las entidades seleccionadas en la capa {layer.name()}", "AttributeSearch", Qgis.Warning)
+                 QgsMessageLog.logMessage(f"No se pudo obtener la extensión para las entidades seleccionadas en la capa {layer.name()}", "AttributeSearch", Qgis.MessageLevel.Warning)
                  continue
 
             combined_extent.combineExtentWith(layer_extent)
@@ -508,7 +513,7 @@ class ResultsPanel(QWidget):
             layer.selectByIds(feature_ids)
         
         self.iface.mapCanvas().refresh() # Refresh map canvas to show selection
-        QgsMessageLog.logMessage(f"Seleccionadas {len(self.selected_features_info)} entidades.", "AttributeSearch", Qgis.Info)
+        QgsMessageLog.logMessage(f"Seleccionadas {len(self.selected_features_info)} entidades.", "AttributeSearch", Qgis.MessageLevel.Info)
 
     # Deselect All Function
     def deselect_all_features(self, silent=False):
@@ -558,7 +563,7 @@ class ResultsPanel(QWidget):
                         try:
                             geom.transform(transform)
                         except Exception as e:
-                            QgsMessageLog.logMessage(f"Error transformando geometría FID {feature.id()} en capa {layer.name()}: {e}", "AttributeSearch", Qgis.Warning)
+                            QgsMessageLog.logMessage(f"Error transformando geometría FID {feature.id()} en capa {layer.name()}: {e}", "AttributeSearch", Qgis.MessageLevel.Warning)
                             continue
                     
                     # Create rubber band based on geometry type
@@ -568,8 +573,8 @@ class ResultsPanel(QWidget):
                     rb.setWidth(2)
                     # --- Fix for isPointType --- 
                     # Check if geometry type is any of the point types
-                    if geom_type in [QgsWkbTypes.Point, QgsWkbTypes.PointZ, QgsWkbTypes.PointM, QgsWkbTypes.PointZM]:
-                         rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+                    if geom_type in [QgsWkbTypes.Type.Point, QgsWkbTypes.Type.PointZ, QgsWkbTypes.Type.PointM, QgsWkbTypes.Type.PointZM]:
+                         rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
                          rb.setIconSize(10)
                     # --- End fix ---
                     
@@ -599,7 +604,7 @@ class ResultsPanel(QWidget):
                         something_cleared = True
                     except Exception as e:
                          # Catch potential errors if item already removed
-                         QgsMessageLog.logMessage(f"Error eliminando rubber band: {e}", "AttributeSearch", Qgis.Debug)
+                         QgsMessageLog.logMessage(f"Error eliminando rubber band: {e}", "AttributeSearch", Qgis.LayoutRenderFlag.Debug)
             
         if something_cleared:
             # Only refresh if something was actually cleared
@@ -650,7 +655,7 @@ class ResultsPanel(QWidget):
             QMessageBox.information(self, "Éxito", f"Resultados exportados exitosamente a:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al exportar resultados: {str(e)}")
-            QgsMessageLog.logMessage(f"Error exportando resultados: {e}", "AttributeSearch", Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error exportando resultados: {e}", "AttributeSearch", Qgis.MessageLevel.Critical)
     
     def export_results(self, file_path):
         """Export results (table data) to file."""
@@ -710,7 +715,7 @@ class ResultsPanel(QWidget):
             return
 
         # Ask for layer name prefix
-        prefix, ok = QInputDialog.getText(self, "Crear Capa", "Prefijo para nombre de capa(s):", QLineEdit.Normal, "Resultados")
+        prefix, ok = QInputDialog.getText(self, "Crear Capa", "Prefijo para nombre de capa(s):", QLineEdit.EchoMode.Normal, "Resultados")
         if not ok or not prefix:
             prefix = "Resultados"
 
@@ -721,7 +726,7 @@ class ResultsPanel(QWidget):
             # Need QgsProject instance, assuming it"s available via self.iface or passed in
             # Using QgsProject.instance() directly here
             # Generate unique layer name (legendInterface removed in QGIS 3.x)
-            existing_names = [l.name() for l in QgsProject.instance().mapLayers().values()]
+            existing_names = [l.name() for l in QgsProject.instance().mapLayers().values()]  # noqa: E741
             base_name = new_layer_name
             counter = 1
             while new_layer_name in existing_names:
@@ -753,7 +758,7 @@ class ResultsPanel(QWidget):
                 QgsProject.instance().addMapLayer(new_layer)
                 layers_created_count += 1
             else:
-                 QgsMessageLog.logMessage(f"No se copiaron entidades para la capa {new_layer_name}", "AttributeSearch", Qgis.Warning)
+                 QgsMessageLog.logMessage(f"No se copiaron entidades para la capa {new_layer_name}", "AttributeSearch", Qgis.MessageLevel.Warning)
 
         if layers_created_count > 0:
             QMessageBox.information(self, "Éxito", f"Se crearon {layers_created_count} capa(s) con las entidades seleccionadas.")
@@ -779,7 +784,7 @@ class ResultsPanel(QWidget):
         menu.addAction(self.export_action)
         menu.addAction(self.create_layer_action)
         
-        menu.exec_(self.results_table.viewport().mapToGlobal(position))
+        menu.exec(self.results_table.viewport().mapToGlobal(position))
 
     def clear_results(self):
          """Clears the results table and internal data."""
@@ -792,7 +797,7 @@ class ResultsPanel(QWidget):
              self.canvas.draw()
          self.deselect_all_features(silent=True) # Clear selection on map
          self.clear_rubber_bands() # Clear any temporary highlights
-         QgsMessageLog.logMessage("Resultados limpiados.", "AttributeSearch", Qgis.Info)
+         QgsMessageLog.logMessage("Resultados limpiados.", "AttributeSearch", Qgis.MessageLevel.Info)
 
     # --- Added Handler for Restart Request ---
     def handle_restart_request(self):

@@ -9,6 +9,7 @@ Common CRS operations used across multiple tools:
 - Auto-detection of UTM zone/band from project CRS (v2.0)
 """
 
+import logging
 import re
 
 from qgis.core import (
@@ -198,6 +199,6 @@ def get_project_utm_info():
                     band = refined_band
                     desc += f" · Banda refinada: {band}"
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     return (zone, band, desc)

@@ -20,6 +20,7 @@
  ***************************************************************************/
 """
 
+import logging
 import os
 import tempfile
 from datetime import datetime
@@ -33,6 +34,7 @@ except ImportError:
 
 from qgis.PyQt.QtCore import QObject, pyqtSignal, QSettings, QSize
 from qgis.core import (
+    QgsFeatureRequest,
     QgsProject, QgsVectorLayer, QgsFeature, QgsGeometry, QgsRectangle,
     QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsWkbTypes,
     QgsMapSettings, QgsMapRendererParallelJob, QgsLayoutExporter
@@ -405,7 +407,7 @@ class ReportGenerator(QObject):
                     try:
                         numeric_values.append(float(value))
                     except (ValueError, TypeError):
-                        pass
+                        logging.getLogger(__name__).debug("suppressed", exc_info=True)
                 
                 if numeric_values:
                     stats_paragraph = doc.add_paragraph()
@@ -472,7 +474,7 @@ class ReportGenerator(QObject):
             geometry_paragraph.add_run(self.get_geometry_type_name(layer.geometryType()))
             geometry_paragraph.add_run("\n")
             
-            if layer.geometryType() == QgsWkbTypes.PolygonGeometry:
+            if layer.geometryType() == QgsWkbTypes.GeometryType.PolygonGeometry:
                 # Add area
                 area = geometry.area()
                 if area < 10000:
@@ -494,7 +496,7 @@ class ReportGenerator(QObject):
                 geometry_paragraph.add_run(f"Perímetro: ").bold = True
                 geometry_paragraph.add_run(perimeter_str)
             
-            elif layer.geometryType() == QgsWkbTypes.LineGeometry:
+            elif layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry:
                 # Add length
                 length = geometry.length()
                 if length < 1000:
@@ -505,7 +507,7 @@ class ReportGenerator(QObject):
                 geometry_paragraph.add_run(f"Longitud: ").bold = True
                 geometry_paragraph.add_run(length_str)
             
-            elif layer.geometryType() == QgsWkbTypes.PointGeometry:
+            elif layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry:
                 # Add coordinates
                 point = geometry.asPoint()
                 
@@ -693,11 +695,11 @@ class ReportGenerator(QObject):
     
     def get_geometry_type_name(self, geometry_type):
         """Get human-readable name for geometry type."""
-        if geometry_type == QgsWkbTypes.PointGeometry:
+        if geometry_type == QgsWkbTypes.GeometryType.PointGeometry:
             return "Punto"
-        elif geometry_type == QgsWkbTypes.LineGeometry:
+        elif geometry_type == QgsWkbTypes.GeometryType.LineGeometry:
             return "Línea"
-        elif geometry_type == QgsWkbTypes.PolygonGeometry:
+        elif geometry_type == QgsWkbTypes.GeometryType.PolygonGeometry:
             return "Polígono"
         else:
             return "Desconocido"

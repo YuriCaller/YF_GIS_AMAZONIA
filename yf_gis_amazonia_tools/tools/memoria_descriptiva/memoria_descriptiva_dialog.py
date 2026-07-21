@@ -65,6 +65,9 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
         self.groupColindantesManual.setEnabled(not self.chkDetectarColindantes.isChecked())
         self.txtGeneralidades.setReadOnly(self.chkTextoDefault.isChecked())
         self._on_modo_changed()  # Aplica estado inicial según modo seleccionado
+        self._reorganizar_ui()   # Fase 2: títulos, duplicados, botones
+        self._configurar_generalidades()  # Fase 2: método/equipo de levantamiento
+        self._instalar_ayudas()           # Fase 2: tooltips explicativos
 
     # =========================================================================
     # PANEL ATLAS-SOLICITANTE (se inserta debajo del groupSolicitante)
@@ -264,6 +267,29 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
         fpol.addRow("Área (ha):",        self.cboCampoArea)
         fpol.addRow("Perímetro (m):",    self.cboCampoPerimetro)
         grp_pol.setLayout(fpol); layout.addWidget(grp_pol)
+        self._fpol_campos = fpol  # referencia para mudar Nombre/DNI (Fase 2)
+
+        # ── Formato del documento (Fase 2) ───────────────────────────────
+        grp_fmt = QtWidgets.QGroupBox("Formato del documento")
+        ff = QtWidgets.QFormLayout()
+        self.cboPatronVertice = QtWidgets.QComboBox()
+        for lbl, val in [
+                ("V-1, V-2, V-3 ...",  "V-{n}"),
+                ("V1, V2, V3 ...",     "V{n}"),
+                ("V01, V02, V03 ...",  "V{nn}"),
+                ("P-1, P-2, P-3 ...",  "P-{n}"),
+                ("P01, P02, P03 ...",  "P{nn}")]:
+            self.cboPatronVertice.addItem(lbl, val)
+        self.cboFormatoAzimut = QtWidgets.QComboBox()
+        for lbl, val in [
+                ("Decimal, 1 decimal - igual al plano (110.2)", ("decimal", 1)),
+                ("Decimal, 2 decimales (110.25)",               ("decimal", 2)),
+                ("Sexagesimal GMS (110\u00b012'30\")",             ("gms", 0)),
+                ("Ambos: decimal (GMS)",                        ("ambos", 1))]:
+            self.cboFormatoAzimut.addItem(lbl, val)
+        ff.addRow("Patr\u00f3n de v\u00e9rtices:", self.cboPatronVertice)
+        ff.addRow("Formato de azimut:",  self.cboFormatoAzimut)
+        grp_fmt.setLayout(ff); layout.addWidget(grp_fmt)
 
         btn = QtWidgets.QPushButton("🔍  Auto-detectar todos los campos")
         btn.setStyleSheet("padding: 6px; font-weight: bold;")
@@ -483,6 +509,10 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
                 'departamento': self.txtDepartamento.text().strip()
             },
             'generalidades':    self.txtGeneralidades.toPlainText().strip(),
+            'metodo_levantamiento': self.txtMetodoLev.text().strip(),
+            'equipo_levantamiento': self.txtEquipoLev.text().strip(),
+            'formato_azimut':   self.cboFormatoAzimut.currentData(),
+            'incluir_mapa':     self.chkIncluirMapa.isChecked(),
             'info_mapa': {
                 'Sistema de coordenadas': self.txtSistema.text().strip(),
                 'Unidades':   self.txtUnidades.text().strip(),
@@ -528,12 +558,241 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
                 'campo_lado':        self.cboCampoLado.currentData(),
                 'campo_area':        self.cboCampoArea.currentData(),
                 'campo_perimetro':   self.cboCampoPerimetro.currentData(),
+                'patron_vertice':    self.cboPatronVertice.currentData(),
                 # Solo usados en modo único
                 'campo_nombre':      self.cboCampoNombre.currentData(),
                 'campo_dni':         self.cboCampoDNI.currentData(),
             },
             'output_file': self.txtOutputFile.text().strip()
         }
+
+    # =========================================================================
+    # FASE 2 — TOOLTIPS DE AYUDA
+    # =========================================================================
+
+    def _instalar_ayudas(self):
+        """Tooltips explicativos: qu\u00e9 seleccionar en cada campo y por qu\u00e9.
+        Se muestran al pasar el mouse sobre el control o su etiqueta."""
+        AYUDAS = {
+            # ── Datos B\u00e1sicos ──
+            'cboPoligonos': (
+                "<b>Capa de pol\u00edgonos</b><br>La capa con el/los predios (\u00e1rea). "
+                "De aqu\u00ed se leen \u00e1rea, per\u00edmetro y nombre del propietario.<br>"
+                "<i>Ejemplo: AREA, AREA_TOTAL, predios.gpkg</i>"),
+            'cboPuntos': (
+                "<b>Capa de puntos</b><br>Los v\u00e9rtices del per\u00edmetro generados por el "
+                "Segmentador, con Este, Norte, Distancia y Azimut como atributos.<br>"
+                "<i>Ejemplo: Vertices, Ptos_Fraccion_1</i>"),
+            'cboLineas': (
+                "<b>Capa de l\u00edneas (opcional)</b><br>Segmentos del per\u00edmetro. "
+                "No es necesaria: distancias y azimuts ya vienen en los puntos."),
+            'txtOutputFile': (
+                "<b>Archivo de salida</b><br>Ruta del .docx a generar. En modo Atlas "
+                "se agrega el nombre de cada propietario como sufijo autom\u00e1ticamente."),
+            # ── Relaci\u00f3n ──
+            'cboCampoIdPoligono': (
+                "<b>Campo ID del pol\u00edgono</b><br>Campo de la capa de pol\u00edgonos que "
+                "identifica cada predio (fid, OBJECTID). Su valor debe coincidir con "
+                "el campo de relaci\u00f3n en los puntos."),
+            'cboCampoRelPuntos': (
+                "<b>Campo relaci\u00f3n en puntos</b><br>Campo de la capa de puntos que "
+                "indica a qu\u00e9 pol\u00edgono pertenece cada v\u00e9rtice "
+                "(normalmente ID_Poligono, generado por el Segmentador)."),
+            # ── Campos de puntos ──
+            'cboCampoVerticeID': (
+                "<b>ID / Etiqueta del v\u00e9rtice</b><br>Campo con el n\u00famero de cada "
+                "v\u00e9rtice (ID_Vertice). Se re-etiqueta seg\u00fan el patr\u00f3n elegido abajo, "
+                "as\u00ed la tabla, el LADO y la narrativa quedan congruentes."),
+            'cboCampoOrdenPunto': (
+                "<b>Orden / Secuencia</b><br>Campo que define el recorrido del "
+                "per\u00edmetro (ID_Vertice o fid). Si el orden es incorrecto, la "
+                "narrativa dar\u00e1 saltos entre v\u00e9rtices no contiguos."),
+            'cboCampoDistancia': (
+                "<b>Distancia (m)</b><br>Distancia al v\u00e9rtice siguiente, generada por "
+                "el Segmentador. Se muestra con 2 decimales (norma). Si un valor "
+                "falta, se calcula desde las coordenadas como respaldo."),
+            'cboCampoAzimut': (
+                "<b>Azimut (\u00b0)</b><br>Azimut al v\u00e9rtice siguiente, generado por el "
+                "Segmentador \u2014 este valor manda, el plugin no recalcula. Debe "
+                "coincidir con las etiquetas del plano."),
+            'cboCampoEste': (
+                "<b>Coordenada Este / X</b><br>Coordenada UTM Este del v\u00e9rtice. "
+                "Se muestra con 4 decimales (norma). Si no existe el campo, se toma "
+                "de la geometr\u00eda del punto."),
+            'cboCampoNorte': (
+                "<b>Coordenada Norte / Y</b><br>Coordenada UTM Norte del v\u00e9rtice. "
+                "Se muestra con 4 decimales (norma)."),
+            'cboCampoLado': (
+                "<b>Nombre del lado</b><br>Opcional. El plugin regenera el lado con "
+                "el patr\u00f3n de v\u00e9rtices (V-1 a V-2) para garantizar congruencia; "
+                "solo se usa el campo BD si activas esa opci\u00f3n en el c\u00f3digo."),
+            # ── Campos de pol\u00edgono ──
+            'cboCampoArea': (
+                "<b>\u00c1rea (ha)</b><br>Campo con el \u00e1rea en hect\u00e1reas (AREA_HA). "
+                "Si viene en m\u00b2 (valor > 5000) se convierte autom\u00e1ticamente. "
+                "Sin campo, se calcula sobre elipsoide WGS84."),
+            'cboCampoPerimetro': (
+                "<b>Per\u00edmetro (m)</b><br>Campo con el per\u00edmetro en metros "
+                "(PERIMETRO, PERIMETER). Sin campo, se calcula de la geometr\u00eda."),
+            'cboCampoNombre': (
+                "<b>Nombre del propietario</b><br>Campo con nombres y apellidos "
+                "(NOMBRE). En modo Atlas, cada memoria toma el nombre de su predio."),
+            'cboCampoDNI': (
+                "<b>DNI del propietario</b><br>Campo con el DNI. Si la capa no lo "
+                "tiene, puede escribirse manualmente en Datos B\u00e1sicos (modo \u00fanico)."),
+            # ── Formato ──
+            'cboPatronVertice': (
+                "<b>Patr\u00f3n de v\u00e9rtices</b><br>C\u00f3mo se etiquetan los v\u00e9rtices en "
+                "TODO el documento: tabla, columna LADO y narrativa. "
+                "Debe coincidir con las etiquetas del plano."),
+            'cboFormatoAzimut': (
+                "<b>Formato de azimut</b><br><b>Decimal 1 dec</b> (recomendado): igual "
+                "al plano y \u00fatil para replanteo con br\u00fajula.<br><b>GMS</b>: para "
+                "instituciones que exijan sexagesimal.<br><b>Ambos</b>: decimal (GMS)."),
+            # ── Generalidades ──
+            'cboEquipoPreset': (
+                "<b>Preset de levantamiento</b><br>Llena M\u00e9todo y Equipo con un clic "
+                "seg\u00fan el equipo usado en campo. Elige Personalizado para escribir "
+                "libremente. El texto de Generalidades se actualiza en vivo."),
+            'txtMetodoLev': (
+                "<b>M\u00e9todo de levantamiento</b><br>C\u00f3mo se hizo el trabajo de campo. "
+                "Se inserta en el primer p\u00e1rrafo de Generalidades."),
+            'txtEquipoLev': (
+                "<b>Equipo usado</b><br>Con qu\u00e9 se midi\u00f3. Se inserta en Generalidades. "
+                "S\u00e9 espec\u00edfico: marca y modelo dan respaldo t\u00e9cnico al documento."),
+            'chkTextoDefault': (
+                "<b>Usar texto predeterminado</b><br>Marcado: el texto se arma "
+                "autom\u00e1ticamente con M\u00e9todo y Equipo (lo que ves es lo que se "
+                "genera). Desmarcado: escribe tu propio texto libremente."),
+            # ── Colindantes ──
+            'chkDetectarColindantes': (
+                "<b>Detectar colindantes autom\u00e1ticamente</b><br>Busca pol\u00edgonos "
+                "vecinos en las capas del proyecto y toma su campo NOMBRE. "
+                "Verifica el resultado: si no hay vecino, usa 'Terrenos del Estado'."),
+            # ── Info T\u00e9cnica ──
+            'txtGrillado': (
+                "<b>Grillado</b><br>Separaci\u00f3n de la grilla de coordenadas del plano "
+                "(ej. 'Cada 500 metros'). Debe coincidir con el plano impreso."),
+        }
+        for nombre, texto in AYUDAS.items():
+            w = getattr(self, nombre, None)
+            if w is not None:
+                w.setToolTip(texto)
+
+    # =========================================================================
+    # FASE 2 — GENERALIDADES: MÉTODO Y EQUIPO DE LEVANTAMIENTO
+    # =========================================================================
+
+    PRESETS_LEVANTAMIENTO = [
+        ("GNSS diferencial \u2014 Trimble Catalyst DA2",
+         "topogr\u00e1fico de campo con posicionamiento satelital diferencial GNSS",
+         "receptor GNSS Trimble Catalyst DA2"),
+        ("GNSS post-proceso PPK",
+         "topogr\u00e1fico de campo con posicionamiento GNSS y post-procesamiento PPK",
+         "receptor GNSS de doble frecuencia"),
+        ("GPS navegador",
+         "topogr\u00e1fico de campo",
+         "equipos GPS navegador con precisi\u00f3n decim\u00e9trica"),
+        ("Fotogrametr\u00eda con drone \u2014 DJI Matrice 4T",
+         "fotogram\u00e9trico mediante aeronave pilotada a distancia (RPAS)",
+         "drone DJI Matrice 4T con puntos de apoyo GNSS"),
+        ("Estaci\u00f3n total",
+         "topogr\u00e1fico de campo",
+         "estaci\u00f3n total"),
+        ("Personalizado...", "", ""),
+    ]
+
+    PLANTILLA_GENERALIDADES = (
+        "El presente documento constituye la Memoria Descriptiva del plano "
+        "perim\u00e9trico adjunto, elaborado con el prop\u00f3sito de precisar los "
+        "linderos, la configuraci\u00f3n geom\u00e9trica y la extensi\u00f3n superficial del "
+        "terreno en cuesti\u00f3n. La informaci\u00f3n t\u00e9cnica aqu\u00ed consignada se "
+        "fundamenta en un levantamiento {}, ejecutado mediante {}, garantizando "
+        "la exactitud m\u00e9trica y el cumplimiento de las normativas vigentes en "
+        "materia de geodesia y cartograf\u00eda.\n\n"
+        "Esta memoria tiene por objeto respaldar jur\u00eddica y t\u00e9cnicamente la "
+        "delimitaci\u00f3n del predio, sustentando su titularidad y proporcionando "
+        "datos verificables para fines catastrales, registrales o "
+        "administrativos, seg\u00fan corresponda.")
+
+    def _configurar_generalidades(self):
+        """Combo de presets + campos m\u00e9todo/equipo, con preview sincronizado."""
+        grp = self.groupGeneralidades
+        lay = grp.layout()
+
+        form = QtWidgets.QFormLayout()
+        self.cboEquipoPreset = QtWidgets.QComboBox()
+        for p in self.PRESETS_LEVANTAMIENTO:
+            self.cboEquipoPreset.addItem(p[0])
+        self.txtMetodoLev = QtWidgets.QLineEdit(self.PRESETS_LEVANTAMIENTO[0][1])
+        self.txtEquipoLev = QtWidgets.QLineEdit(self.PRESETS_LEVANTAMIENTO[0][2])
+        form.addRow("Levantamiento:", self.cboEquipoPreset)
+        form.addRow("M\u00e9todo:", self.txtMetodoLev)
+        form.addRow("Equipo:", self.txtEquipoLev)
+
+        cont = QtWidgets.QWidget(); cont.setLayout(form)
+        try:
+            lay.insertWidget(1, cont)
+        except Exception:
+            lay.addWidget(cont)
+
+        self.cboEquipoPreset.currentIndexChanged.connect(self._aplicar_preset_equipo)
+        self.txtMetodoLev.textChanged.connect(self._actualizar_preview_generalidades)
+        self.txtEquipoLev.textChanged.connect(self._actualizar_preview_generalidades)
+        self.chkTextoDefault.toggled.connect(self._actualizar_preview_generalidades)
+        self._actualizar_preview_generalidades()
+
+    def _aplicar_preset_equipo(self, idx):
+        p = self.PRESETS_LEVANTAMIENTO[idx]
+        if p[1] or p[2]:
+            self.txtMetodoLev.setText(p[1])
+            self.txtEquipoLev.setText(p[2])
+        self._actualizar_preview_generalidades()
+
+    def _actualizar_preview_generalidades(self, *args):
+        """El cuadro de texto muestra EXACTAMENTE lo que ir\u00e1 al documento."""
+        if not self.chkTextoDefault.isChecked():
+            return
+        metodo = self.txtMetodoLev.text().strip() or "topogr\u00e1fico de campo"
+        equipo = self.txtEquipoLev.text().strip() or "equipos GNSS"
+        self.txtGeneralidades.setPlainText(
+            self.PLANTILLA_GENERALIDADES.format(metodo, equipo))
+
+    # =========================================================================
+    # FASE 2 — REORGANIZACIÓN DE UI
+    # =========================================================================
+
+    def _reorganizar_ui(self):
+        """Títulos sin numeración huérfana, elimina grupo duplicado de campos,
+        y deja Generar Memoria como única acción primaria."""
+        self.groupSolicitante.setTitle("Datos del Solicitante")
+        self.groupUbicacion.setTitle("Ubicación")
+        self.groupColindantes.setTitle("Colindantes")
+        self.groupGeneralidades.setTitle("Generalidades")
+        self.groupInfoMapa.setTitle("Información Técnica del Mapa")
+
+        # Grupo "Selección de Campos" duplicado en Info Técnica:
+        # Nombre/DNI se mudan a la pestaña Campos; orden/ID eran UI muerta.
+        try:
+            self._fpol_campos.addRow("Nombre del propietario:", self.cboCampoNombre)
+            self._fpol_campos.addRow("DNI del propietario:",    self.cboCampoDNI)
+            self.groupCampos.setVisible(False)
+        except Exception as e:
+            print("Aviso reorganizando campos: {}".format(e))
+
+        # Botones: Generar Memoria primario único; button_box solo Cerrar
+        try:
+            from qgis.PyQt.QtWidgets import QDialogButtonBox
+            SB = getattr(QDialogButtonBox, 'StandardButton', QDialogButtonBox)
+            self.button_box.setStandardButtons(SB.Close)
+            btn_close = self.button_box.button(SB.Close)
+            if btn_close:
+                btn_close.setText("Cerrar")
+        except Exception as e:
+            print("Aviso configurando botones: {}".format(e))
+        self.btnGenerar.setStyleSheet(
+            "padding: 8px 18px; font-weight: bold; font-size: 11pt;")
+        self.btnGenerar.setDefault(True)
 
     # =========================================================================
     # VALIDACIÓN

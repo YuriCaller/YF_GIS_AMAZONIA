@@ -22,6 +22,7 @@
 
 import os
 from qgis.PyQt.QtCore import QObject, pyqtSignal, QVariant
+from ....core.qt_compat import QVariant_Int, QVariant_Double, QVariant_String
 from qgis.core import (
     QgsProject, QgsVectorLayer, QgsFeature, QgsGeometry, QgsField, QgsFields,
     QgsWkbTypes, QgsFeatureRequest, QgsRectangle, QgsCoordinateReferenceSystem,
@@ -89,9 +90,9 @@ class LayerUtils(QObject):
         if not geometry:
             return None
         
-        if geometry.type() == QgsWkbTypes.PointGeometry:
+        if geometry.type() == QgsWkbTypes.GeometryType.PointGeometry:
             geom_str = "Point"
-        elif geometry.type() == QgsWkbTypes.LineGeometry:
+        elif geometry.type() == QgsWkbTypes.GeometryType.LineGeometry:
             geom_str = "LineString"
         else:
             geom_str = "Polygon"
@@ -141,8 +142,8 @@ class LayerUtils(QObject):
         
         # Create fields
         fields = QgsFields()
-        fields.append(QgsField("original_id", QVariant.Int))
-        fields.append(QgsField("buffer_distance", QVariant.Double))
+        fields.append(QgsField("original_id", QVariant_Int))
+        fields.append(QgsField("buffer_distance", QVariant_Double))
         
         # Create features
         features = []
@@ -181,8 +182,8 @@ class LayerUtils(QObject):
         
         # Create fields
         fields = QgsFields()
-        fields.append(QgsField("layer1_id", QVariant.Int))
-        fields.append(QgsField("layer2_id", QVariant.Int))
+        fields.append(QgsField("layer1_id", QVariant_Int))
+        fields.append(QgsField("layer2_id", QVariant_Int))
         
         # Create features
         features = []
@@ -245,7 +246,7 @@ class LayerUtils(QObject):
         
         # Create fields
         fields = QgsFields()
-        fields.append(QgsField("original_id", QVariant.Int))
+        fields.append(QgsField("original_id", QVariant_Int))
         
         # Create features
         features = []
@@ -310,8 +311,8 @@ class LayerUtils(QObject):
         
         # Create fields
         fields = QgsFields()
-        fields.append(QgsField("layer1_id", QVariant.Int))
-        fields.append(QgsField("layer2_id", QVariant.Int))
+        fields.append(QgsField("layer1_id", QVariant_Int))
+        fields.append(QgsField("layer2_id", QVariant_Int))
         
         # Create features
         features = []
@@ -378,7 +379,7 @@ class LayerUtils(QObject):
         
         # Create fields
         fields = QgsFields()
-        fields.append(QgsField("original_id", QVariant.Int))
+        fields.append(QgsField("original_id", QVariant_Int))
         
         # Create features
         features = []
@@ -447,13 +448,13 @@ class LayerUtils(QObject):
         
         if style_type == 'single':
             # Create symbol based on geometry type
-            if layer.geometryType() == QgsWkbTypes.PointGeometry:
+            if layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry:
                 symbol = QgsMarkerSymbol.createSimple({
                     'name': 'circle',
                     'color': '255,0,0,255',
                     'size': '2'
                 })
-            elif layer.geometryType() == QgsWkbTypes.LineGeometry:
+            elif layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry:
                 symbol = QgsLineSymbol.createSimple({
                     'color': '0,0,255,255',
                     'width': '0.5'
@@ -480,13 +481,13 @@ class LayerUtils(QObject):
             
             for i, value in enumerate(values):
                 # Create symbol based on geometry type
-                if layer.geometryType() == QgsWkbTypes.PointGeometry:
+                if layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry:
                     symbol = QgsMarkerSymbol.createSimple({
                         'name': 'circle',
                         'color': f'{i*30 % 255},{i*50 % 255},{i*70 % 255},255',
                         'size': '2'
                     })
-                elif layer.geometryType() == QgsWkbTypes.LineGeometry:
+                elif layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry:
                     symbol = QgsLineSymbol.createSimple({
                         'color': f'{i*30 % 255},{i*50 % 255},{i*70 % 255},255',
                         'width': '0.5'

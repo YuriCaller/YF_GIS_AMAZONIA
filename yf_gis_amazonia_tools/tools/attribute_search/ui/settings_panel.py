@@ -130,7 +130,7 @@ class SettingsPanel(QWidget):
         self.general_layout.addWidget(self.export_group)
         
         # Add spacer
-        self.general_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        self.general_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         
         # Add general tab
         self.tabs.addTab(self.general_tab, "General")
@@ -204,7 +204,7 @@ class SettingsPanel(QWidget):
         self.appearance_layout.addWidget(self.highlight_group)
         
         # Add spacer
-        self.appearance_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        self.appearance_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         
         # Add appearance tab
         self.tabs.addTab(self.appearance_tab, "Apariencia")
@@ -289,7 +289,7 @@ class SettingsPanel(QWidget):
         self.report_layout.addWidget(self.report_content_group)
         
         # Add spacer
-        self.report_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        self.report_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         
         # Add report tab
         self.tabs.addTab(self.report_tab, "Reportes")
@@ -344,7 +344,7 @@ class SettingsPanel(QWidget):
         self.advanced_layout.addWidget(self.debug_group)
         
         # Add spacer
-        self.advanced_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        self.advanced_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
         
         # Add advanced tab
         self.tabs.addTab(self.advanced_tab, "Avanzado")
@@ -474,11 +474,11 @@ class SettingsPanel(QWidget):
             self,
             "Confirmar",
             "¿Está seguro de que desea restablecer todos los valores a la configuración predeterminada?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
         )
         
-        if result == QMessageBox.Yes:
+        if result == QMessageBox.StandardButton.Yes:
             # Remove all settings
             settings = QSettings()
             settings.beginGroup("QGISAttributeSearch")

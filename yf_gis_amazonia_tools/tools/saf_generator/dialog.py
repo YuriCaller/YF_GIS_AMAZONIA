@@ -38,7 +38,7 @@ class OrientacionMapTool(QgsMapTool):
         super().__init__(canvas)
         self.canvas = canvas
         self.puntos = []
-        self.rubberBand = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.rubberBand = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.LineGeometry)
         self.rubberBand.setColor(QColor(255, 0, 0, 200))
         self.rubberBand.setWidth(4)
         self.first_click = True
@@ -48,7 +48,7 @@ class OrientacionMapTool(QgsMapTool):
         self.puntos.append(punto)
 
         if len(self.puntos) == 1:
-            self.rubberBand.reset(QgsWkbTypes.LineGeometry)
+            self.rubberBand.reset(QgsWkbTypes.GeometryType.LineGeometry)
             self.rubberBand.addPoint(punto)
             if self.first_click:
                 QMessageBox.information(
@@ -83,7 +83,7 @@ class OrientacionMapTool(QgsMapTool):
         self.first_click = True
 
     def deactivate(self):
-        self.rubberBand.reset(QgsWkbTypes.LineGeometry)
+        self.rubberBand.reset(QgsWkbTypes.GeometryType.LineGeometry)
         super().deactivate()
 
 
@@ -196,7 +196,7 @@ class GeneradorPlantacionDialog(QDialog):
             ["Nombre", "Código", "Color"]
         )
         self.tabla_especies.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.Stretch
+            0, QHeaderView.ResizeMode.Stretch
         )
         self.tabla_especies.setMaximumHeight(120)
 
@@ -232,7 +232,7 @@ class GeneradorPlantacionDialog(QDialog):
         self.tabla_proporciones = QTableWidget(0, 2)
         self.tabla_proporciones.setHorizontalHeaderLabels(["Especie", "%"])
         self.tabla_proporciones.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.Stretch
+            0, QHeaderView.ResizeMode.Stretch
         )
         self.tabla_proporciones.setMaximumHeight(100)
         ls.addWidget(self.tabla_proporciones)
@@ -362,7 +362,7 @@ class GeneradorPlantacionDialog(QDialog):
         self.combo_capa.clear()
         for layer in QgsProject.instance().mapLayers().values():
             if (isinstance(layer, QgsVectorLayer)
-                    and layer.geometryType() == QgsWkbTypes.PolygonGeometry):
+                    and layer.geometryType() == QgsWkbTypes.GeometryType.PolygonGeometry):
                 self.combo_capa.addItem(layer.name(), layer)
 
     # ------------------------------------------------------------------
@@ -370,7 +370,7 @@ class GeneradorPlantacionDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _toggle_orientation(self, state):
-        enabled = state == Qt.Checked
+        enabled = state == Qt.CheckState.Checked
         self.btn_orientacion.setEnabled(enabled)
         self.spin_angulo.setEnabled(enabled)
         self.usar_orientacion = enabled

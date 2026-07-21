@@ -11,7 +11,10 @@ Each tool module must expose a class that implements:
 import importlib
 import os
 
-from qgis.PyQt.QtWidgets import QAction
+try:
+    from qgis.PyQt.QtGui import QAction        # Qt6: QAction vive en QtGui
+except ImportError:
+    from qgis.PyQt.QtWidgets import QAction    # Qt5: QAction vive en QtWidgets
 from qgis.PyQt.QtGui import QIcon
 
 from .logger import log_info, log_error, log_warning

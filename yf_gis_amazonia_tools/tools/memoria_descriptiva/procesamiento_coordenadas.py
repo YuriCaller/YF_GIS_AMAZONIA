@@ -7,8 +7,11 @@ VERSIÓN 3.0 — Lógica basada en la estructura real:
   - perimetros: ID_Poligono, ID_Segmento, longitud, azimut (opcional)
 """
 
+import logging
 import math
 from qgis.core import QgsDistanceArea, QgsFeatureRequest
+
+from . import formato_catastral as fc
 
 
 def obtener_vertices_de_poligono(punto_layer, id_poligono, campos_config=None):
@@ -121,12 +124,13 @@ def obtener_vertices_de_poligono(punto_layer, id_poligono, campos_config=None):
             continue
         coord = geom.asPoint()
 
-        # ID del vértice
-        vid = _get_val_str(punto, c_vid)
-        if not vid:
-            vid = 'V{:02d}'.format(i + 1)
-        else:
-            vid = 'V{:02d}'.format(int(_to_float(vid))) if str(vid).isdigit() else str(vid)
+        # ID del vértice — normalizado con patrón uniforme (default 'V-{n}')
+        patron = campos_config.get('patron_vertice', 'V-{n}')
+        vid_raw = _get_val_str(punto, c_vid)
+        num_v = fc.extraer_numero_vertice(vid_raw)
+        if num_v is None:
+            num_v = i + 1
+        vid = fc.normalizar_etiqueta(num_v, patron)
 
         # Coordenadas (campo BD o geometría)
         este  = _get_val_num(punto, c_este)
@@ -152,20 +156,40 @@ def obtener_vertices_de_poligono(punto_layer, id_poligono, campos_config=None):
     # IMPORTANTE: el pop de _x/_y se hace en un segundo loop separado para que
     # el último vértice pueda acceder a vertices[0]['_x'] sin que ya esté eliminado.
     n = len(vertices)
+    usar_lado_bd = campos_config.get('usar_lado_bd', False)
     for i, v in enumerate(vertices):
         sig = vertices[(i + 1) % n]
 
-        if not v['lado']:
-            v['lado'] = '{} a {}'.format(v['vertice'], sig['vertice'])
+        # LADO: regenerado con etiquetas normalizadas para garantizar
+        # congruencia con la columna VÉRTICE (salvo que se pida usar el BD)
+        if not usar_lado_bd or not v['lado']:
+            v['lado'] = fc.etiqueta_lado(v['vertice'], sig['vertice'])
 
+        # Distancia y azimut calculados desde las MISMAS coordenadas de la
+        # tabla (Este/Norte) — fuente única de verdad
+        d_calc = fc.distancia_desde_coordenadas(
+            v['este'], v['norte'], sig['este'], sig['norte'])
+        az_calc = fc.azimut_desde_coordenadas(
+            v['este'], v['norte'], sig['este'], sig['norte'])
+
+        # Distancia: el atributo BD manda (norma: 2 decimales) pero se valida
         if v['distancia'] is None or v['distancia'] == 0.0:
-            dx = sig['_x'] - v['_x']; dy = sig['_y'] - v['_y']
-            v['distancia'] = round(math.sqrt(dx*dx + dy*dy), 4)
+            v['distancia'] = round(d_calc, 2)
+        elif abs(v['distancia'] - d_calc) > 0.05:
+            print("  \u26a0 {}: distancia BD {:.2f} m difiere de geometr\u00eda {:.2f} m".format(
+                v['vertice'], v['distancia'], d_calc))
 
-        if v['azimut'] is None or v['azimut'] == 0.0:
-            dx = sig['_x'] - v['_x']; dy = sig['_y'] - v['_y']
-            az = math.degrees(math.atan2(dx, dy))
-            v['azimut'] = round(az + 360 if az < 0 else az, 4)
+        # Azimut: el atributo BD (generado por el Segmentador) es la fuente
+        # autoritativa — la memoria RECOPILA, no recalcula. El cálculo desde
+        # coordenadas es solo respaldo cuando el campo está vacío.
+        if v['azimut'] is None:
+            v['azimut'] = round(az_calc, 1) if az_calc is not None else 0.0
+            print("  ⓘ {}: azimut vacío en BD — calculado desde coordenadas: {}".format(
+                v['vertice'], v['azimut']))
+        elif az_calc is not None and fc.diferencia_angular(v['azimut'], az_calc) > 0.5:
+            # Solo advertencia informativa; el documento usa el valor BD intacto
+            print("  ⚠ {}: azimut BD {} difiere del geométrico {:.1f} (se usa BD)".format(
+                v['vertice'], v['azimut'], az_calc))
 
     # Segundo loop: limpiar claves internas DESPUÉS de todos los cálculos
     for v in vertices:
@@ -210,12 +234,12 @@ def calcular_area_perimetro_feature(feature, pol_layer, campos_config=None):
                 else:
                     fuente_area = 'campo BD "{}"'.format(c_area)
             except (ValueError, TypeError):
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     if area_ha is None:
         da = QgsDistanceArea(); da.setEllipsoid('WGS84')
         try:   area_ha = round(da.measureArea(geom) / 10000, 6)
-        except: area_ha = round(geom.area() / 10000, 6)
+        except Exception: area_ha = round(geom.area() / 10000, 6)
         fuente_area = 'geometría (WGS84)'
 
     # ── Campo BD para perímetro ───────────────────────────────────────────────
@@ -231,12 +255,12 @@ def calcular_area_perimetro_feature(feature, pol_layer, campos_config=None):
                 perim_m = float(val)
                 fuente_perim = 'campo BD "{}"'.format(c_perim)
             except (ValueError, TypeError):
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     if perim_m is None:
         da = QgsDistanceArea(); da.setEllipsoid('WGS84')
         try:   perim_m = round(da.measurePerimeter(geom), 4)
-        except: perim_m = round(geom.length(), 4)
+        except Exception: perim_m = round(geom.length(), 4)
         fuente_perim = 'geometría (WGS84)'
 
     print("  Área: {:.4f} ha [{}]  |  Perímetro: {:.2f} m [{}]".format(
@@ -246,8 +270,11 @@ def calcular_area_perimetro_feature(feature, pol_layer, campos_config=None):
             'fuente_area': fuente_area, 'fuente_perimetro': fuente_perim}
 
 
-def generar_descripcion_linderos(vertices):
-    """Descripción narrativa de linderos con rumbos."""
+def generar_descripcion_linderos(vertices, modo_azimut=None, decimales_azimut=None):
+    """Descripción narrativa de linderos, coherente con la tabla y el plano.
+
+    modo_azimut: 'decimal' (default, igual al plano), 'gms' o 'ambos'.
+    """
     if not vertices:
         return "No se encontraron vértices para este polígono."
     n = len(vertices)
@@ -259,8 +286,9 @@ def generar_descripcion_linderos(vertices):
         dist = v.get('distancia') or 0.0
         az   = v.get('azimut')   or 0.0
         partes.append(
-            "con rumbo {} y una distancia de {:.2f} m llega al vértice {}".format(
-                _az_rumbo(az), dist, sig['vertice']))
+            "{} y una distancia de {:.2f} m llega al vértice {}".format(
+                fc.frase_azimut_narrativa(az, modo_azimut, decimales_azimut),
+                dist, sig['vertice']))
     return "; ".join(partes) + "; cerrando así el perímetro del predio."
 
 
@@ -294,7 +322,7 @@ def _get_val_num(feature, campo):
     try:
         v = feature[campo]
         return float(v) if v is not None else None
-    except: return None
+    except Exception: return None
 
 
 def _get_val_str(feature, campo):
@@ -302,26 +330,14 @@ def _get_val_str(feature, campo):
     try:
         v = feature[campo]
         return str(v).strip() if v is not None else None
-    except: return None
+    except Exception: return None
 
 
 def _to_float(v):
     try: return float(v)
-    except: return 0.0
+    except Exception: return 0.0
 
 
 def _az_rumbo(az_deg):
-    try:
-        az = float(az_deg) % 360.0
-        g = int(az); md = (az - g)*60; m = int(md); s = int((md-m)*60)
-        if az <= 90:   return "N {}°{:02d}'{:02d}\" E".format(g,m,s)
-        elif az <= 180:
-            a=180-az; g2=int(a); md2=(a-g2)*60; m2=int(md2); s2=int((md2-m2)*60)
-            return "S {}°{:02d}'{:02d}\" E".format(g2,m2,s2)
-        elif az <= 270:
-            a=az-180; g2=int(a); md2=(a-g2)*60; m2=int(md2); s2=int((md2-m2)*60)
-            return "S {}°{:02d}'{:02d}\" O".format(g2,m2,s2)
-        else:
-            a=360-az; g2=int(a); md2=(a-g2)*60; m2=int(md2); s2=int((md2-m2)*60)
-            return "N {}°{:02d}'{:02d}\" O".format(g2,m2,s2)
-    except: return "{:.4f}°".format(az_deg)
+    """Rumbo cuadrante GMS derivado del azimut (delegado a formato_catastral)."""
+    return fc.azimut_a_rumbo_gms(az_deg)

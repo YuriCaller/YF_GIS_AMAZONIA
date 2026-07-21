@@ -21,6 +21,7 @@ from qgis.core import (
     QgsMessageLog, Qgis
 )
 from qgis.PyQt.QtCore import QVariant
+from ....core.qt_compat import QVariant_Int, QVariant_Double, QVariant_String
 from qgis.PyQt.QtGui import QColor, QFont
 
 class PolygonCreator:
@@ -45,7 +46,7 @@ class PolygonCreator:
                 QgsMessageLog.logMessage(
                     f"El archivo CSV no existe: {csv_path}", 
                     "YF Tools Plus", 
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return []
             
@@ -58,7 +59,7 @@ class PolygonCreator:
             QgsMessageLog.logMessage(
                 f"Error al leer campos del CSV: {str(e)}", 
                 "YF Tools Plus", 
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
             return []
         
@@ -88,22 +89,22 @@ class PolygonCreator:
             QgsMessageLog.logMessage(
                 f"========== INICIANDO CREACIÓN DE POLÍGONO ==========", 
                 "YF Tools Plus", 
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             QgsMessageLog.logMessage(
                 f"Archivo CSV: {csv_path}", 
                 "YF Tools Plus", 
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             QgsMessageLog.logMessage(
                 f"Campo X: '{field_x}', Campo Y: '{field_y}'", 
                 "YF Tools Plus", 
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             QgsMessageLog.logMessage(
                 f"CRS: {crs}", 
                 "YF Tools Plus", 
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             # Verificar que el archivo CSV existe
@@ -111,7 +112,7 @@ class PolygonCreator:
                 QgsMessageLog.logMessage(
                     f"El archivo CSV no existe: {csv_path}", 
                     "YF Tools Plus", 
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return None
             
@@ -131,14 +132,14 @@ class PolygonCreator:
             QgsMessageLog.logMessage(
                 f"Campos disponibles en CSV: {available_fields}", 
                 "YF Tools Plus", 
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             if field_x not in available_fields:
                 QgsMessageLog.logMessage(
                     f"El campo X '{field_x}' no existe en el CSV. Campos disponibles: {available_fields}", 
                     "YF Tools Plus", 
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return None
                 
@@ -146,7 +147,7 @@ class PolygonCreator:
                 QgsMessageLog.logMessage(
                     f"El campo Y '{field_y}' no existe en el CSV. Campos disponibles: {available_fields}", 
                     "YF Tools Plus", 
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return None
             
@@ -160,7 +161,7 @@ class PolygonCreator:
                 QgsMessageLog.logMessage(
                     f"El CRS '{crs}' no es válido", 
                     "YF Tools Plus", 
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return None
             
@@ -178,13 +179,13 @@ class PolygonCreator:
                         QgsMessageLog.logMessage(
                             f"Punto {row_count}: X={x}, Y={y}", 
                             "YF Tools Plus", 
-                            Qgis.Info
+                            Qgis.MessageLevel.Info
                         )
                     except (ValueError, KeyError) as e:
                         QgsMessageLog.logMessage(
                             f"Error al leer fila {row_count}: {str(e)}", 
                             "YF Tools Plus", 
-                            Qgis.Warning
+                            Qgis.MessageLevel.Warning
                         )
                         continue
             
@@ -193,14 +194,14 @@ class PolygonCreator:
                 QgsMessageLog.logMessage(
                     f"Se necesitan al menos 3 puntos para crear un polígono. Solo se encontraron {len(points)} puntos válidos.", 
                     "YF Tools Plus", 
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return None
             
             QgsMessageLog.logMessage(
                 f"Se cargaron {len(points)} puntos correctamente", 
                 "YF Tools Plus", 
-                Qgis.Success
+                Qgis.MessageLevel.Success
             )
             
             # Crear capa de polígonos en memoria
@@ -214,7 +215,7 @@ class PolygonCreator:
                 QgsMessageLog.logMessage(
                     "Error al crear la capa de polígonos en memoria", 
                     "YF Tools Plus", 
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return None
             
@@ -222,9 +223,9 @@ class PolygonCreator:
             
             # Añadir campos
             provider.addAttributes([
-                QgsField("ID", QVariant.Int),
-                QgsField("AREA", QVariant.Double),
-                QgsField("PERIMETRO", QVariant.Double)
+                QgsField("ID", QVariant_Int),
+                QgsField("AREA", QVariant_Double),
+                QgsField("PERIMETRO", QVariant_Double)
             ])
             polygon_layer.updateFields()
             
@@ -235,7 +236,7 @@ class PolygonCreator:
                 QgsMessageLog.logMessage(
                     "La geometría del polígono está vacía", 
                     "YF Tools Plus", 
-                    Qgis.Critical
+                    Qgis.MessageLevel.Critical
                 )
                 return None
             
@@ -250,7 +251,7 @@ class PolygonCreator:
             QgsMessageLog.logMessage(
                 f"Polígono creado - Área: {area:.4f} Ha, Perímetro: {perimeter:.2f} m", 
                 "YF Tools Plus", 
-                Qgis.Success
+                Qgis.MessageLevel.Success
             )
             
             # Añadir atributos
@@ -285,7 +286,7 @@ class PolygonCreator:
             text_format.setFont(QFont(
                 style_params.get('label_font', 'Arial'), 
                 int(style_params.get('label_size', '9')), 
-                QFont.Bold
+                QFont.Weight.Bold
             ))
             
             buffer_settings = QgsTextBufferSettings()
@@ -304,7 +305,7 @@ class PolygonCreator:
                 # Para versiones anteriores de QGIS 3.x
                 try:
                     label_settings.placement = QgsPalLayerSettings.Placement.OverPoint
-                except:
+                except Exception:
                     # Fallback para versiones muy antiguas
                     label_settings.placement = 0  # OverPoint
             
@@ -320,7 +321,7 @@ class PolygonCreator:
             QgsMessageLog.logMessage(
                 "✓ Polígono añadido al proyecto exitosamente", 
                 "YF Tools Plus", 
-                Qgis.Success
+                Qgis.MessageLevel.Success
             )
             
             return polygon_layer
@@ -328,5 +329,5 @@ class PolygonCreator:
         except Exception as e:
             import traceback
             error_msg = f"Error al crear polígono: {str(e)}\n{traceback.format_exc()}"
-            QgsMessageLog.logMessage(error_msg, "YF Tools Plus", Qgis.Critical)
+            QgsMessageLog.logMessage(error_msg, "YF Tools Plus", Qgis.MessageLevel.Critical)
             return None

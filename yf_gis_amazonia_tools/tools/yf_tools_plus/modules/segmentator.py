@@ -27,6 +27,7 @@ from qgis.core import (
     QgsWkbTypes, QgsMessageLog, Qgis
 )
 from qgis.PyQt.QtCore import QVariant
+from ....core.qt_compat import QVariant_Int, QVariant_Double, QVariant_String
 from qgis.PyQt.QtGui import QColor, QFont
 import traceback
 
@@ -65,7 +66,14 @@ class Segmentator:
     # ──────────────────────────────────────────────────────────────────────
 
     def _campos_heredados(self, capa_poligonos, propios):
-        return [f for f in capa_poligonos.fields() if f.name() not in propios]
+        # Excluir columnas de clave primaria del origen (fid/FID/ogc_fid/objectid):
+        # si se heredan, al exportar la capa temporal a GeoPackage chocan con el
+        # 'fid' que GPKG crea como clave primaria y los datos se desordenan/corren.
+        # (El usuario tenía que borrar la columna fid a mano antes de guardar.)
+        _reservados = {"fid", "ogc_fid", "objectid", "gid"}
+        return [f for f in capa_poligonos.fields()
+                if f.name() not in propios
+                and f.name().lower() not in _reservados]
 
     def _valores_heredados(self, feature, campos):
         return [feature[c.name()] for c in campos]
@@ -86,7 +94,7 @@ class Segmentator:
         if len(vertices_xy) < 3:
             QgsMessageLog.logMessage(
                 "Anillo '" + nombre_anillo + "' con menos de 3 vertices. Omitiendo.",
-                "YF Tools", Qgis.Warning)
+                "YF Tools", Qgis.MessageLevel.Warning)
             return [], [], id_global_start
 
         if vertices_xy[0].compare(vertices_xy[-1], 1e-9):
@@ -182,10 +190,10 @@ class Segmentator:
         :returns: True si exitoso
         """
         try:
-            if not capa_poligonos or capa_poligonos.geometryType() != QgsWkbTypes.PolygonGeometry:
+            if not capa_poligonos or capa_poligonos.geometryType() != QgsWkbTypes.GeometryType.PolygonGeometry:
                 QgsMessageLog.logMessage(
                     "La capa no es valida o no es de tipo poligono.",
-                    "YF Tools", Qgis.Critical)
+                    "YF Tools", Qgis.MessageLevel.Critical)
                 return False
 
             # Determinar qué features procesar
@@ -205,11 +213,11 @@ class Segmentator:
             capa_lin = QgsVectorLayer("LineString?crs=" + crs_wkt, nombre_lineas, "memory")
             prov_lin = capa_lin.dataProvider()
             prov_lin.addAttributes([
-                QgsField("ID_Global",   QVariant.Int),
-                QgsField("ID_Poligono", QVariant.Int),
-                QgsField("ID_Segmento", QVariant.Int),
-                QgsField("longitud",    QVariant.Double),
-                QgsField("azimut",      QVariant.Double),
+                QgsField("ID_Global",   QVariant_Int),
+                QgsField("ID_Poligono", QVariant_Int),
+                QgsField("ID_Segmento", QVariant_Int),
+                QgsField("longitud",    QVariant_Double),
+                QgsField("azimut",      QVariant_Double),
             ] + ch_lin)
             capa_lin.updateFields()
 
@@ -217,16 +225,16 @@ class Segmentator:
             capa_pnt = QgsVectorLayer("Point?crs=" + crs_wkt, nombre_puntos, "memory")
             prov_pnt = capa_pnt.dataProvider()
             prov_pnt.addAttributes([
-                QgsField("ID_Global",   QVariant.Int),
-                QgsField("ID_Poligono", QVariant.Int),
-                QgsField("ID_Vertice",  QVariant.Int),
-                QgsField("LADO",        QVariant.String),
-                QgsField("Este",        QVariant.Double),
-                QgsField("Norte",       QVariant.Double),
-                QgsField("Distancia",   QVariant.Double),
-                QgsField("Azimut",      QVariant.Double),
-                QgsField("ang_int",     QVariant.Double),
-                QgsField("ang_extr",    QVariant.Double),
+                QgsField("ID_Global",   QVariant_Int),
+                QgsField("ID_Poligono", QVariant_Int),
+                QgsField("ID_Vertice",  QVariant_Int),
+                QgsField("LADO",        QVariant_String),
+                QgsField("Este",        QVariant_Double),
+                QgsField("Norte",       QVariant_Double),
+                QgsField("Distancia",   QVariant_Double),
+                QgsField("Azimut",      QVariant_Double),
+                QgsField("ang_int",     QVariant_Double),
+                QgsField("ang_extr",    QVariant_Double),
             ] + ch_pnt)
             capa_pnt.updateFields()
 
@@ -307,13 +315,13 @@ class Segmentator:
                    "Campos heredados: " + str([c.name() for c in ch_lin]))
             if solo_seleccionados:
                 msg += " [solo seleccionados]"
-            QgsMessageLog.logMessage(msg, "YF Tools", Qgis.Success)
+            QgsMessageLog.logMessage(msg, "YF Tools", Qgis.MessageLevel.Success)
             return True
 
         except Exception as e:
             QgsMessageLog.logMessage(
                 "Error al segmentar: " + str(e) + "\n" + traceback.format_exc(),
-                "YF Tools", Qgis.Critical)
+                "YF Tools", Qgis.MessageLevel.Critical)
             raise Exception("Error al segmentar: " + str(e))
 
     # ──────────────────────────────────────────────────────────────────────
@@ -333,14 +341,14 @@ class Segmentator:
     def _recalc_lineas(self, capa):
         try:
             if not capa or not capa.isValid():
-                QgsMessageLog.logMessage("Capa de lineas no valida.", "YF Tools", Qgis.Warning)
+                QgsMessageLog.logMessage("Capa de lineas no valida.", "YF Tools", Qgis.MessageLevel.Warning)
                 return False
             fields = capa.fields()
             idx_lon = fields.indexOf("longitud")
             idx_az  = fields.indexOf("azimut")
             if idx_lon < 0 or idx_az < 0:
                 QgsMessageLog.logMessage(
-                    "Faltan campos 'longitud'/'azimut'.", "YF Tools", Qgis.Warning)
+                    "Faltan campos 'longitud'/'azimut'.", "YF Tools", Qgis.MessageLevel.Warning)
                 return False
 
             cambios = {}
@@ -362,12 +370,12 @@ class Segmentator:
             capa.triggerRepaint()
             QgsMessageLog.logMessage(
                 "Recalculados " + str(len(cambios)) + " segmentos en '" + capa.name() + "'.",
-                "YF Tools", Qgis.Success)
+                "YF Tools", Qgis.MessageLevel.Success)
             return True
 
         except Exception as e:
             QgsMessageLog.logMessage(
-                "Error recalculando lineas: " + str(e), "YF Tools", Qgis.Critical)
+                "Error recalculando lineas: " + str(e), "YF Tools", Qgis.MessageLevel.Critical)
             return False
 
     def _recalc_puntos(self, capa):
@@ -378,18 +386,18 @@ class Segmentator:
         """
         try:
             if not capa or not capa.isValid():
-                QgsMessageLog.logMessage("Capa de puntos no valida.", "YF Tools", Qgis.Warning)
+                QgsMessageLog.logMessage("Capa de puntos no valida.", "YF Tools", Qgis.MessageLevel.Warning)
                 return False
 
             fields = capa.fields()
-            I = {name: fields.indexOf(name) for name in
+            I = {name: fields.indexOf(name) for name in  # noqa: E741
                  ["Este", "Norte", "Distancia", "Azimut", "ang_int", "ang_extr",
                   "LADO", "ID_Poligono", "ID_Vertice"]}
 
             faltantes = [k for k in ["Este", "Norte", "Distancia", "Azimut"] if I[k] < 0]
             if faltantes:
                 QgsMessageLog.logMessage(
-                    "Faltan campos: " + str(faltantes), "YF Tools", Qgis.Warning)
+                    "Faltan campos: " + str(faltantes), "YF Tools", Qgis.MessageLevel.Warning)
                 return False
 
             # Agrupar por ID_Poligono
@@ -447,13 +455,13 @@ class Segmentator:
             capa.triggerRepaint()
             QgsMessageLog.logMessage(
                 "Recalculados " + str(len(cambios)) + " vertices en '" + capa.name() + "'.",
-                "YF Tools", Qgis.Success)
+                "YF Tools", Qgis.MessageLevel.Success)
             return True
 
         except Exception as e:
             QgsMessageLog.logMessage(
                 "Error recalculando puntos: " + str(e) + "\n" + traceback.format_exc(),
-                "YF Tools", Qgis.Critical)
+                "YF Tools", Qgis.MessageLevel.Critical)
             return False
 
     # ──────────────────────────────────────────────────────────────────────
@@ -475,7 +483,7 @@ class Segmentator:
         buf.setColor(QColor(255, 255, 255))
         fmt.setBuffer(buf)
         pal.setFormat(fmt)
-        pal.placement = QgsPalLayerSettings.Line
+        pal.placement = QgsPalLayerSettings.Placement.Line
         pal.placementFlags = QgsPalLayerSettings.OnLine | QgsPalLayerSettings.AboveLine
         capa.setLabeling(QgsVectorLayerSimpleLabeling(pal))
         capa.setLabelsEnabled(True)
@@ -494,8 +502,8 @@ class Segmentator:
         buf.setColor(QColor(255, 255, 255))
         fmt.setBuffer(buf)
         pal.setFormat(fmt)
-        pal.placement = QgsPalLayerSettings.AroundPoint
-        pal.quadOffset = QgsPalLayerSettings.QuadrantAboveRight
+        pal.placement = QgsPalLayerSettings.Placement.AroundPoint
+        pal.quadOffset = QgsPalLayerSettings.QuadrantPosition.QuadrantAboveRight
         pal.dist = 1.0
         capa.setLabeling(QgsVectorLayerSimpleLabeling(pal))
         capa.setLabelsEnabled(True)

@@ -3,7 +3,7 @@
 Archivo de recursos generado manualmente debido a la falta de pyrcc5
 """
 
-from PyQt5 import QtCore
+from qgis.PyQt import QtCore
 
 qt_resource_data = b"\
 \x00\x00\x03\xd6\

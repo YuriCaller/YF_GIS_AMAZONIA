@@ -4,6 +4,7 @@ pdf_report.py
 Genera el informe técnico de fidelidad del post-proceso GNSS usando reportlab.
 Si reportlab no está disponible, genera HTML equivalente como fallback.
 """
+import logging
 import os
 import datetime
 import json
@@ -261,6 +262,80 @@ class PDFReportGenerator:
 
         # ─────────────── PIE ────────────────────────
         story.append(Spacer(1, 0.5*cm))
+        # ═══ SECCIÓN: TRAZABILIDAD DEL PROCESAMIENTO (estilo TBC) ═══
+        # Demuestra que el .pos fue realmente ejecutado por RTKLIB y permite
+        # auditar/reproducir el resultado.
+        proc_info = getattr(self, 'proc_info', {}) or {}
+        if proc_info:
+            story.append(Spacer(1, 0.3*cm))
+            story.append(Paragraph('6. Trazabilidad del Procesamiento', s_h1))
+            story.append(Spacer(1, 0.15*cm))
+
+            s_mono = ParagraphStyle('mono', fontSize=7,
+                fontName='Courier', textColor=NEGRO, leading=9,
+                wordWrap='CJK')
+
+            traza_rows = []
+            if proc_info.get('modo'):
+                traza_rows.append(['Modo de procesamiento', proc_info['modo']])
+            archivos = proc_info.get('archivos', [])
+            if archivos:
+                import os as _os
+                nombres = ', '.join(_os.path.basename(a) for a in archivos if a)
+                traza_rows.append(['Archivos rover procesados', nombres])
+            if proc_info.get('binary'):
+                import os as _os
+                traza_rows.append(['Motor de cálculo',
+                    f"RTKLIB rnx2rtkp ({_os.path.basename(proc_info['binary'])})"])
+            if proc_info.get('pos'):
+                import os as _os
+                pos_f = proc_info['pos']
+                tam = ''
+                try:
+                    tam = f' ({_os.path.getsize(pos_f):,} bytes)'
+                except Exception:
+                    logging.getLogger(__name__).debug("suppressed", exc_info=True)
+                traza_rows.append(['Archivo de solución (.pos)',
+                    _os.path.basename(pos_f) + tam])
+
+            if traza_rows:
+                t_traza = Table(traza_rows, colWidths=[5*cm, 12*cm])
+                t_traza.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (0,-1), VERDE_S),
+                    ('TEXTCOLOR', (0,0), (0,-1), VERDE),
+                    ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+                    ('FONTNAME', (1,0), (1,-1), 'Helvetica'),
+                    ('FONTSIZE', (0,0), (-1,-1), 8),
+                    ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor('#cccccc')),
+                    ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                    ('TOPPADDING', (0,0), (-1,-1), 4),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+                    ('LEFTPADDING', (0,0), (-1,-1), 6),
+                ]))
+                story.append(t_traza)
+
+            # Comando ejecutado (la prueba de ejecución)
+            if proc_info.get('cmd'):
+                story.append(Spacer(1, 0.2*cm))
+                story.append(Paragraph(
+                    '<b>Comando RTKLIB ejecutado</b> '
+                    '(reproducible para auditoría):', s_body))
+                story.append(Spacer(1, 0.1*cm))
+                cmd_txt = proc_info['cmd'].replace('&', '&amp;').replace(
+                    '<', '&lt;').replace('>', '&gt;')
+                cmd_cell = [[Paragraph(cmd_txt, s_mono)]]
+                t_cmd = Table(cmd_cell, colWidths=[17*cm])
+                t_cmd.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f0f0f0')),
+                    ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#999999')),
+                    ('TOPPADDING', (0,0), (-1,-1), 5),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+                    ('LEFTPADDING', (0,0), (-1,-1), 6),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 6),
+                ]))
+                story.append(t_cmd)
+            story.append(Spacer(1, 0.3*cm))
+
         pie_data = [[Paragraph(
             f'GNSS Post-Process v2.0  ·  {m.get("profesional","")}  ·  '
             f'{m.get("cip","")}  ·  Generado: {now}',

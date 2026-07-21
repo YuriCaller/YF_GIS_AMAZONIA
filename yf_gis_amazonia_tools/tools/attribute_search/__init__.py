@@ -48,12 +48,12 @@ class Tool(BaseTool):
                 self.iface.mainWindow(),
             )
             self._dock.setAllowedAreas(
-                Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
+                Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
             )
             self._dock.setMinimumSize(800, 600)
             self._dock.setWidget(self._dialog.widget())
             self.iface.mainWindow().addDockWidget(
-                Qt.RightDockWidgetArea, self._dock
+                Qt.DockWidgetArea.RightDockWidgetArea, self._dock
             )
         else:
             self._dock.setVisible(not self._dock.isVisible())

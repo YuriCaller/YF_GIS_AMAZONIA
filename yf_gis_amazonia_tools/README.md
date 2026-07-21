@@ -1,194 +1,295 @@
 # YF GIS Amazonia Tools
 
-**Professional GIS toolkit for cadastral regularization, surveying, GNSS post-processing and agroforestry management in the Peruvian Amazon.**
+*Read this in: **English** · [Español](README.es.md)*
+
+**Professional GIS toolkit for cadastral, surveying, GNSS post-processing and agroforestry workflows in the Peruvian Amazon.**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.22%2B-green.svg)](https://qgis.org/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)](metadata.txt)
+[![Version](https://img.shields.io/badge/version-2.5.1-brightgreen.svg)](metadata.txt)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
 
 ---
 
-## Descripción
+## Overview
 
-**YF GIS Amazonia Tools** es un plugin unificado para QGIS que integra seis herramientas especializadas para profesionales de topografía, catastro, geodesia y gestión forestal en la Amazonía peruana. Combina funcionalidades que antes estaban dispersas en múltiples plugins en una sola suite coherente, organizada por áreas temáticas.
+**YF GIS Amazonia Tools** is a unified QGIS plugin that integrates a set of specialized tools for surveying, cadastral, geodesy and forestry professionals. It brings together —organized by theme— functionality that would otherwise be scattered across multiple plugins, in a single coherent suite.
 
-El plugin está diseñado para el flujo de trabajo real del ingeniero forestal, topógrafo o especialista GIS peruano: desde el levantamiento GNSS en campo, pasando por el procesamiento de coordenadas, hasta la generación de memorias descriptivas y reportes técnicos conforme a los estándares del IGN Perú y SERFOR.
+The plugin is built around the real-world workflow of the forestry engineer, surveyor or GIS specialist: from GNSS field surveying, through coordinate post-processing and plan georeferencing, to the generation of technical memoirs, cartography and reports compliant with the standards of Peru's IGN, SERFOR and GOREMAD.
+
+Although it was born for the Peruvian Amazon, it is now used in more than 20 countries.
 
 ---
 
-## Herramientas integradas
+## What's new in v2.5.0 – v2.5.1
 
-Todas las herramientas están **completamente integradas y funcionando** dentro de un único menú principal en QGIS.
+- **ANTEX / PCO-PCV correction system (2.5.0):** the antenna field is no longer documentary. New ANTEX manager (IGS20 download, parsing, custom manufacturer files, RINEX base header reading); receiver/satellite phase-center corrections are now actually applied when a valid ANTEX and antenna name are present. Universal antenna support (Trimble, CHCNAV, Leica, South, Emlid, Mettatec…).
+- **Qt6 dialog fixes (2.5.1):** fixed 'no attribute Accepted' errors on QGIS 4 in Smart Labels, Layout Rescaler, Batch Export, Vector Geometry and Title Block.
+
+## What's new in v2.4.0
+
+- **Smart Georeferencer (NEW):** a dynamic, real-time georeferencer for scanned plans and drone orthophotos. ArcGIS-style control-point capture, snapping to reference vertices, automatic GCP detection with OpenCV, a TPS warp engine, and a *leave-one-out* quality diagnostic that flags inconsistent control points. Integrated into the **Catastral** submenu. (Details below.)
+
+## v2.3.0
+
+- **GNSS — Occupation Mode (TBC/Pathfinder-style):** detects occupation event flags (Trimble Geo7X/DA2) inside a continuous RINEX and resolves each occupied point separately, never averaging between different points. Output: one layer with all points (H1, H2…) plus a per-point quality report.
+- **GNSS — Submeter DGPS:** differential code positioning (no ambiguity resolution), where false fixes are impossible. Honest 0.3–1 m accuracy, ideal under canopy.
+- **GNSS — Batch processing:** process multiple rover files against one base in a single run.
+
+## v2.2.1
+
+- **Qt6 / QGIS 4 support:** runs on both Qt5 (QGIS 3.x) and Qt6 (QGIS 4.x) builds via the `qgis.PyQt` shim. Backwards-compatible with QGIS 3.22+.
+
+---
+
+## Featured: Smart Georeferencer
+
+A **dynamic, live** georeferencer designed to fit scanned cadastral plans and drone orthophotos with vertex-level precision. It complements QGIS's native georeferencer with two differentiators it doesn't have: **real-time snapping to vertices** and a **leave-one-out quality diagnostic**.
+
+- **Immediate placement:** a button drops the image onto the canvas and into the Layers panel, ready to georeference.
+- **ArcGIS-style two-click GCP capture:** click a feature on the image → click the control point on the map. The source anchor stays fixed and a guide arrow connects the two points.
+- **Snapping:** the target control point snaps onto the vertices of your reference layers, using the QGIS snapping configuration. Cadastral precision.
+- **Automatic GCP detection:** via OpenCV (SIFT/ORB + RANSAC). OpenCV installs itself on first use and is **only required for automatic detection** — manual capture works without it.
+- **Two-stage TPS warp engine:** the image warps and follows pan/zoom together with the rest of the map.
+- **Leave-one-out (LOO) quality diagnostic:** detects inconsistent control points (mis-measured or mis-digitized). With TPS the standard residual is zero by construction, so the LOO uses an affine model that does isolate the problem point. Colour heatmap on the markers (green/amber/red) and a worst-first list. Requires ≥5 GCPs to be reliable.
+- **Point management:** right-click context menu to add, delete or edit a point's XY coordinates, and to load GCPs from CSV/Excel (columns `pixelX, pixelY, mapX, mapY`).
+- **Export:** full-resolution GeoTIFF (TPS or polynomial) and an option to place the georeferenced layer permanently.
+- **Format compatibility:** JPEG/JFIF sources (CamScanner scans, etc.) are decoded to GeoTIFF for a reliable warp.
+
+---
+
+## Integrated tools
+
+All tools are **fully integrated and working** within a single main menu in QGIS, organized into thematic submenus.
 
 ### Catastral
 
-| Herramienta | Descripción |
+| Tool | Description |
 |---|---|
-| **Memoria Descriptiva** v3.2 | Generador automático de memorias descriptivas en Word (.docx) para saneamiento físico-legal de predios rurales. Tres modos: polígono único, atlas completo (una memoria por cada polígono), o atlas por selección. Auto-detecta capas adyacentes para identificación de colindantes. |
-| **Segmentador de Parcelas** | División y segmentación de polígonos en líneas y vértices con cálculo automático de azimuts y ángulos internos/externos. Delega a la pestaña de segmentación de YF Tools Plus. |
-| **YF Tools Plus** v2.3 | Suite de herramientas topográficas: creación de polígonos desde Excel/CSV, segmentación con herencia de campos, exportación a Excel con un clic, recalculación de atributos geométricos. Soporte completo de polígonos multipart y anillos interiores. |
+| **Memoria Descriptiva** | Automatic generator of technical memoirs in Word (.docx) for the legal regularization of rural land. Modes: single polygon, full atlas (one memoir per polygon) and atlas by selection. Auto-detects adjacent layers to identify neighbors. |
+| **Segmentador de Parcelas** | Polygon division and segmentation into lines and vertices with automatic azimuth and angle calculation. Layer names prefixed with the source name to avoid GeoPackage collisions. |
+| **Calcular Geometría Vectorial** | Calculates area, perimeter, centroids, coordinates, length and azimuth (DMS/decimal) directly on the same layer, without creating new layers. Dual method: Ellipsoidal (`$area`) or Planar (`area($geometry)`) for legal plans and cadastre. Polygons, lines and points. |
+| **YF Tools Plus** | Surveying toolset: build polygons from Excel/CSV, segmentation with field inheritance, one-click export to Excel, recomputation of geometric attributes. Full multipart and inner-ring support. |
+| **Polygon Divider** | Divides a polygon by exact area, N equal parts or percentages, using a traced or angle-defined cut line (red highlight, ArcGIS Pro "Divide" style). Optional GeoPackage output layer with inherited attributes and automatic labeling, or in-place edit with confirmation. 100% native `QgsGeometry`, no external dependencies. |
+| **Smart Georeferencer** *(NEW v2.4.0)* | Dynamic georeferencer for scanned plans and drone orthophotos: ArcGIS-style GCP capture, snapping to vertices, automatic detection with OpenCV, TPS warp, leave-one-out diagnostic, GCP import from CSV/Excel and GeoTIFF export. (See featured section.) |
+| **Smart Labels** | Intelligent labeling from a right-click on the canvas. Auto-detects geometry type and applies technical styles: V-01/V-02 vertices, distance+azimuth on lines, area+perimeter block on polygons. Uses dynamic expressions (`$area`, `$perimeter`, `$length`). |
+| **Batch Export (Exportar Expediente)** | Exports all layers and layouts to a structured folder (SHP + GPKG + PDF + XLSX + metadata) in one click. Templates for GOREMAD, SERFOR, ACCA and simple delivery. Optional ZIP compression. |
 
 ### Geodesia / GNSS
 
-| Herramienta | Descripción |
+| Tool | Description |
 |---|---|
-| **Post-Proceso PPK/PPP** v2.0 | Procesamiento GNSS diferencial con RTKLIB. Validación geodésica estricta de bases, generación de reportes PDF con estructura IGN Perú (UTM, Geográficas, Cartesianas), archivos .cor para submisión al IGN, exportación a SHP, GPKG, KML y GeoJSON. |
+| **Post-Proceso PPK/PPP** | Differential GNSS processing with RTKLIB, field-validated against Trimble Business Center. Automatic precise-ephemeris download (SP3+CLK Final/Rapid from ESA/IGS) based on the RINEX date. Automatic rnx2rtkp engine installation. Base auto-fill from the RINEX header (TBC-style). Rover/base antenna height. Occupation Mode (multiple points in one RINEX), submeter DGPS and batch processing. Anti-false-fix validation and 1/σ² weighted averaging. PDF reports. |
 
 ### Agroforestal / Ambiental
 
-| Herramienta | Descripción |
+| Tool | Description |
 |---|---|
-| **SAF Generator** v2.1 | Generador profesional de sistemas agroforestales con seis métodos de distribución espacial (Hash, Ajedrez, Filas, Bloques, Aleatorio, Secuencial). Identificación única por planta (A1, B2, C3...), orientación personalizada de filas con captura en canvas, simbología automática por especie. |
+| **SAF Generator** | Agroforestry-system generator with several spatial distribution methods. Unique per-plant identification, custom row orientation captured on canvas, and automatic per-species symbology. |
 
 ### Búsqueda y Análisis
 
-| Herramienta | Descripción |
+| Tool | Description |
 |---|---|
-| **Búsqueda Avanzada de Atributos** v1.1 | Búsqueda multi-capa con expresiones simples o avanzadas (expresiones QGIS). Visualización de resultados con gráficos, generación de reportes, exportación a CSV/Excel, zoom y resaltado de features encontradas. |
+| **Búsqueda Avanzada de Atributos** | Multi-layer search with simple or advanced (QGIS) expressions. Chart visualization, report generation, CSV/Excel export, zoom and highlighting of matched features. |
+
+### Layout / Compositor
+
+| Tool | Description |
+|---|---|
+| **Generar Cajetín (Title Block)** | Professional title-block generator with 4 templates (Simple, BIM/Technical, Cadastral/Forestry, Premium). Dynamic expressions for scale, date and CRS. Integrated north arrow, location map, legend and situation thumbnail; elements grouped automatically. |
+| **Redimensionar Layout (Layout Rescaler)** | Rescales all layout elements proportionally when the paper size changes, preserving relative positions via a proportional snapshot. Integrated into the layout designer toolbar. |
+| **Table Style Manager** | Applies, copies and pastes attribute-table styles in the layout designer. 5 predefined styles. Copy/paste between tables. Export/import styles as JSON. |
+
+### Comparación Visual
+
+| Tool | Description |
+|---|---|
+| **Swipe Tool** | ArcGIS Pro-style visual layer comparison (sliding curtain). |
+
+### Navegación
+
+| Tool | Description |
+|---|---|
+| **Go-To** | Coordinate navigation with multi-format input (UTM, geographic, DMS) and smart paste. |
 
 ---
 
-## Instalación
+## Installation
 
-### Requisitos
+### Requirements
 
-- **QGIS 3.22** o superior (probado hasta 3.40+)
+- **QGIS 3.22** or newer (tested up to 3.40+; compatible with QGIS 4.x / Qt6)
 - Python 3.9+
-- **python-docx** (requerido para Memoria Descriptiva)
+- **python-docx** (required for Memoria Descriptiva)
 
-Dependencias opcionales (según la herramienta que uses):
-- `pandas` + `matplotlib` — para reportes y visualización en Attribute Search
-- `reportlab` — para reportes PDF en GNSS Post-Process
-- `RTKLIB` — binario externo requerido para post-proceso GNSS
+Optional dependencies (depending on the tool you use):
+- `opencv-python-headless` — for **automatic GCP detection** in Smart Georeferencer (installs itself on first use; manual capture doesn't need it)
+- `pandas` + `matplotlib` — for reports and visualization in Attribute Search
+- `reportlab` — for PDF reports in GNSS Post-Process
+- `RTKLIB` — external binary for GNSS post-processing (downloads itself on the first run)
 
-### Instalación desde ZIP (recomendado)
+### Install from ZIP (recommended)
 
-1. Descargar el [último release](https://github.com/YuriCaller/YF_GIS_AMAZONIA/releases) o el archivo ZIP del repositorio
-2. En QGIS: **Complementos → Administrar e instalar complementos → Instalar desde ZIP**
-3. Seleccionar el archivo ZIP e **Instalar complemento**
-4. El menú **YF GIS Amazonia** aparecerá en la barra de menú superior de QGIS
+1. Download the [latest release](https://github.com/YuriCaller/YF_GIS_AMAZONIA/releases) or the repository ZIP.
+2. In QGIS: **Plugins → Manage and Install Plugins → Install from ZIP**.
+3. Select the ZIP and click **Install Plugin**.
+4. The **YF GIS Amazonia** menu will appear in the top menu bar.
 
-### Instalación manual
+> **When upgrading from a previous version**, the most reliable path is to uninstall the old version and fully restart QGIS before installing the new one, to avoid leftover cached modules.
 
-1. Clonar o descargar este repositorio
-2. Copiar la carpeta `yf_gis_amazonia_tools/` a:
+### Manual install
+
+1. Clone or download this repository.
+2. Copy the `yf_gis_amazonia_tools/` folder to:
    ```
    Windows: %APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\
    Linux:   ~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/
    macOS:   ~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/
    ```
-3. Reiniciar QGIS
-4. Activar en **Complementos → Administrar e instalar complementos → Instalados**
+3. Restart QGIS.
+4. Enable it under **Plugins → Manage and Install Plugins → Installed**.
 
-### Instalación de dependencias Python
+### Python dependencies
 
-Abrir **OSGeo4W Shell** (Windows) o terminal (Linux/macOS) y ejecutar:
+Open the **OSGeo4W Shell** (Windows) or a terminal (Linux/macOS) and run:
 
 ```bash
 python -m pip install python-docx pandas matplotlib reportlab
 ```
 
+(OpenCV installs automatically the first time you use automatic GCP detection.)
+
 ---
 
-## Uso
+## Usage
 
-Tras la instalación, aparece un menú **YF GIS Amazonia** en la barra de menú de QGIS con cuatro submenús temáticos:
+After installation, a **YF GIS Amazonia** menu appears with its thematic submenus:
 
 ```
 YF GIS Amazonia
 ├── Catastral
 │   ├── Memoria Descriptiva
 │   ├── Segmentador de Parcelas
-│   └── YF Tools Plus
+│   ├── Calcular Geometría Vectorial
+│   ├── YF Tools Plus
+│   ├── Polygon Divider — Dividir Polígono
+│   ├── Smart Georeferencer — Georreferenciar en vivo   (NEW)
+│   ├── Smart Labels — Etiquetar capa
+│   └── Exportar Expediente
 ├── Geodesia / GNSS
 │   └── Post-Proceso PPK/PPP
 ├── Agroforestal / Ambiental
 │   └── SAF Generator
 ├── Búsqueda y Análisis
 │   └── Búsqueda Avanzada de Atributos
-└── Acerca de...
+├── Layout / Compositor
+│   ├── Generar Cajetín
+│   ├── Redimensionar Layout
+│   └── Table Style Manager
+├── Comparación Visual
+│   └── Swipe Tool
+├── Navegación
+│   └── Go-To (Ir a coordenadas)
+└── Acerca de... (About)
 ```
 
-Cada herramienta abre su propio diálogo o panel acoplable con la funcionalidad completa.
+Each tool opens its own dialog or dockable panel with the full functionality. The interface labels are in Spanish, matching the plugin's identity and how the tools appear in the QGIS menu.
 
 ---
 
-## Arquitectura
+## Architecture
 
-El plugin usa una arquitectura modular con carga lazy de herramientas:
+The plugin uses a modular architecture with lazy tool loading:
 
 ```
 yf_gis_amazonia_tools/
 ├── __init__.py              # Entry point (classFactory)
-├── metadata.txt             # Metadata de QGIS
+├── metadata.txt             # QGIS metadata
 ├── LICENSE                  # GNU GPL v3
-├── README.md
-├── icons/                   # Iconos del plugin
-├── core/                    # Infraestructura compartida
-│   ├── plugin_manager.py    # Orquestador y menú principal
-│   ├── tool_registry.py     # Registro con carga lazy
-│   ├── base_tool.py         # Clase base para herramientas
-│   ├── logger.py            # Logger unificado (QGIS Message Log)
-│   ├── crs_utils.py         # Utilidades CRS/UTM
-│   └── qt_compat.py         # Compatibilidad PyQt5/PyQt6
-└── tools/                   # Herramientas (submódulos)
+├── README.md                # English (this file)
+├── README.es.md             # Spanish
+├── icons/                   # Plugin icons
+├── core/                    # Shared infrastructure
+│   ├── plugin_manager.py    # Orchestrator and main menu
+│   ├── tool_registry.py     # Lazy-loading registry
+│   ├── base_tool.py         # Base class for tools
+│   ├── logger.py            # Unified logger (QGIS Message Log)
+│   ├── coord_parser.py      # Multi-format coordinate parsing
+│   ├── crs_utils.py         # CRS/UTM utilities
+│   └── qt_compat.py         # PyQt5/PyQt6 compatibility
+└── tools/                   # Tools (submodules)
     ├── memoria_descriptiva/
-    ├── saf_generator/
+    ├── segmentador/
+    ├── vector_geometry/
     ├── yf_tools_plus/
+    ├── polygon_divider/
+    ├── smart_georeferencer/     # NEW v2.4.0
+    ├── smart_labels/
+    ├── batch_export/
     ├── gnss_postprocess/
+    ├── saf_generator/
     ├── attribute_search/
-    └── segmentador/
+    ├── layout_tools/
+    ├── layout_rescaler/
+    ├── swipe/
+    └── goto/
 ```
 
-Cada herramienta expone una clase `Tool(BaseTool)` con método `run()`. Las herramientas se cargan solo al ser invocadas por primera vez, minimizando el tiempo de arranque de QGIS.
+Each tool exposes a `Tool(BaseTool)` class with a `run()` method. Tools are loaded only when invoked for the first time, minimizing QGIS startup time.
 
 ---
 
-## Compatibilidad
+## Compatibility
 
-- **QGIS 3.22 LTR** — Soporte completo
-- **QGIS 3.28+** — Soporte completo
-- **QGIS 3.34 LTR** — Soporte completo
-- **QGIS 3.40+** — Soporte completo (PyQt6)
+> ✅ **Qt5 and Qt6:** compatible with QGIS 3.22+ (Qt5/PyQt5) and QGIS 4.x (Qt6/PyQt6) via the `qgis.PyQt` shim.
+
+- **QGIS 3.22 LTR** — Full support
+- **QGIS 3.28 / 3.34 LTR** — Full support
+- **QGIS 3.40+ / 4.x** — Full support (PyQt6)
 - **Windows / Linux / macOS**
 
 ---
 
-## Autor
+## Author
 
-**Ing. Yuri Fabian Caller Córdova**
-- **CIP N° 214377** — Ingeniero Forestal
-- Especialista GIS / GNSS / Fotogrametría
-- Empresa: **Training Universal Company SAC (TUCSA)**
-- Ubicación: Puerto Maldonado, Madre de Dios, Perú
+**Ing. Yuri Fabián Caller Córdova**
+- **CIP N° 214377** — Forestry Engineer
+- GIS / GNSS / Photogrammetry specialist
+- Company: **Training Universal Company SAC (TUCSA)**
+- Location: Puerto Maldonado, Madre de Dios, Peru
 - Email: yuricaller@gmail.com
 - Web: [gis-amazonia.pe](https://gis-amazonia.pe)
 
 ---
 
-## Contribuciones
+## Contributing
 
-Las contribuciones son bienvenidas. Para reportar bugs o solicitar nuevas funcionalidades, abre un [issue](https://github.com/YuriCaller/YF_GIS_AMAZONIA/issues).
+Contributions are welcome. To report bugs or request features, open an [issue](https://github.com/YuriCaller/YF_GIS_AMAZONIA/issues).
 
-Para contribuir código:
-1. Fork del repositorio
-2. Crear una rama para tu feature (`git checkout -b feature/mi-feature`)
-3. Commit de los cambios (`git commit -m 'Agregar mi-feature'`)
-4. Push a la rama (`git push origin feature/mi-feature`)
-5. Abrir un Pull Request
-
----
-
-## Licencia
-
-Este proyecto está licenciado bajo la **GNU General Public License v3.0**. Ver el archivo [LICENSE](LICENSE) para los términos completos.
+To contribute code:
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/my-feature`).
+3. Commit your changes (`git commit -m 'Add my-feature'`).
+4. Push to the branch (`git push origin feature/my-feature`).
+5. Open a Pull Request.
 
 ---
 
-## Agradecimientos
+## License
 
-- **Equipo de QGIS** por la excelente plataforma y APIs que hacen posible este plugin
-- **RTKLIB** por la biblioteca de procesamiento GNSS de código abierto
-- **python-docx**, **reportlab**, **pyproj** y demás bibliotecas que sustentan las herramientas
-- **Comunidad forestal y catastral de Madre de Dios** cuyas necesidades reales guían el desarrollo de este plugin
+This project is licensed under the **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for the full terms.
+
+---
+
+## Acknowledgments
+
+- The **QGIS team** for the platform and APIs that make this plugin possible.
+- **RTKLIB** for the open-source GNSS processing library.
+- **OpenCV**, **python-docx**, **reportlab**, **pyproj** and the other libraries that power these tools.
+- The **forestry and cadastral community of Madre de Dios**, whose real-world needs guide this plugin's development.
+
+
+## Créditos de iconos
+
+Algunos iconos provienen de [Font-GIS](https://github.com/Viglino/font-gis) por Jean-Marc Viglino, licencia CC BY 4.0, y del proyecto QGIS (GPL).

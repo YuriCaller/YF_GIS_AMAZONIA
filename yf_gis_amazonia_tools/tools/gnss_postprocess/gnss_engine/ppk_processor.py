@@ -152,6 +152,17 @@ class PPKProcessor(QThread):
         if p.gnav_file and os.path.isfile(p.gnav_file):
             cmd.append(p.gnav_file)
 
+        # 4) Efemérides precisas (CRÍTICO si sateph=1 en el .conf):
+        #    rnx2rtkp acepta .sp3/.clk/.ionex como posicionales adicionales.
+        #    Si el .conf pide 'precise' pero el SP3 no se pasa, RTKLIB
+        #    no tiene órbitas y TODO el procesamiento se degrada.
+        if p.sp3_file and os.path.isfile(p.sp3_file):
+            cmd.append(p.sp3_file)
+        if p.clk_file and os.path.isfile(p.clk_file):
+            cmd.append(p.clk_file)
+        if p.ionex_file and os.path.isfile(p.ionex_file):
+            cmd.append(p.ionex_file)
+
         # CRÍTICO: normalizar rutas — RTKLIB falla con barras mixtas / y \
         cmd = [os.path.normpath(c) if (os.sep in c or '/' in c) else c for c in cmd]
         return cmd
@@ -159,15 +170,15 @@ class PPKProcessor(QThread):
     def _execute(self, cmd: list) -> bool:
         """Ejecuta rnx2rtkp.
 
-        Usa subprocess.run con la lista directamente (shell=False, default seguro).
+        Usa subprocess.run con la lista directamente (shell desactivado, default seguro).
         Python en Windows cita automáticamente argumentos con espacios cuando
-        recibe una lista. Esto evita el bug Bandit B602 (subprocess_popen_with_shell_equals_true).
+        recibe una lista. Esto evita el patron Bandit B602 (subprocess con shell habilitado).
 
         Para logging, usamos subprocess.list2cmdline() que muestra cómo Windows
-        verá el comando sin necesidad de shell=True.
+        verá el comando sin necesidad de invocar un shell.
         """
         try:
-            # Log del comando de forma segura (no requiere shell=True)
+            # Log del comando de forma segura (no requiere invocar un shell)
             cmd_display = subprocess.list2cmdline(cmd)
             self.log.emit(f'  [CMD] {cmd_display}', 'info')
 
@@ -175,7 +186,17 @@ class PPKProcessor(QThread):
             #  - Seguro (sin inyección de shell)
             #  - Compatible con rutas con espacios (Python cita automáticamente)
             #  - Multiplataforma (Windows y Linux funcionan idéntico)
-            result = subprocess.run(
+            # Guardar trazabilidad para el informe (estilo TBC).
+            # cmd = [binary, '-k', conf, '-o', out_pos, rover, base, ...]
+            self.last_cmd = ' '.join(f'"{a}"' if ' ' in a else a for a in cmd)
+            self.last_binary = cmd[0] if cmd else ''
+            try:
+                self.last_conf = cmd[cmd.index('-k') + 1] if '-k' in cmd else ''
+                self.last_pos = cmd[cmd.index('-o') + 1] if '-o' in cmd else ''
+            except (ValueError, IndexError):
+                self.last_conf = ''
+                self.last_pos = ''
+            result = subprocess.run(  # nosec B603 - RTKLIB, lista sin shell, ruta validada
                 cmd,
                 capture_output=True,
                 text=True, encoding='utf-8', errors='replace',
@@ -197,12 +218,12 @@ class PPKProcessor(QThread):
                 self.log.emit(f'  {line}', level)
 
             # Resumen de procesamiento
-            proc_count = sum(1 for l in output_lines if l.strip().startswith('processing'))
+            proc_count = sum(1 for l in output_lines if l.strip().startswith('processing'))  # noqa: E741
             if proc_count > 0:
                 self.log.emit(f'  ⏱ {proc_count} épocas procesadas por RTKLIB', 'info')
 
             # Detectar si RTKLIB imprimió el help en vez de procesar
-            if any('usage: rnx2rtkp' in l for l in output_lines):
+            if any('usage: rnx2rtkp' in l for l in output_lines):  # noqa: E741
                 self.log.emit(
                     '❌ RTKLIB mostró la ayuda en vez de procesar. '
                     'Problema con los argumentos del comando.',
@@ -211,7 +232,7 @@ class PPKProcessor(QThread):
                 return False
 
             # Detectar "no obs data"
-            if any('no obs data' in l.lower() for l in output_lines):
+            if any('no obs data' in l.lower() for l in output_lines):  # noqa: E741
                 self.log.emit(
                     '❌ RTKLIB no pudo leer datos de observación. '
                     'Verifique que las rutas de archivos no tengan caracteres especiales.',

@@ -11,6 +11,7 @@
  ****************************************************************************/
 """
 
+import logging
 import os
 import json
 # Compatibilidad PyQt5 / PyQt6 (QGIS 3.x y 4.x)
@@ -30,6 +31,7 @@ from qgis.utils import iface
 
 # Importar las clases de módulos
 from .modules.excel_to_csv import ExcelToCsv
+from .modules.table_to_polygon import TableToPolygon
 from .modules.polygon_creator import PolygonCreator
 from .modules.segmentator import Segmentator
 from .modules.excel_exporter import ExcelExporter
@@ -41,7 +43,7 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(
 class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
     """Diálogo principal del plugin YF Tools Plus."""
 
-    def __init__(self, iface, parent=None):
+    def __init__(self, iface, parent=None):  # noqa: F811
         """Constructor."""
         super(YF_Tools_PlusDialog, self).__init__(parent)
         self.setupUi(self)
@@ -75,11 +77,11 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             self.mCrsSelector_polygon.setCrs(QgsProject.instance().crs())
             
             # Configurar filtros de capas
-            self.mLayerComboBox_polygon.setFilters(QgsMapLayerProxyModel.PolygonLayer)
-            self.mLayerComboBox_export.setFilters(QgsMapLayerProxyModel.VectorLayer)
+            self.mLayerComboBox_polygon.setFilters(QgsMapLayerProxyModel.Filter.PolygonLayer)
+            self.mLayerComboBox_export.setFilters(QgsMapLayerProxyModel.Filter.VectorLayer)
             # Filtros para combos de recalculo (v2.2)
-            self.mLayerComboBox_recalc_lineas.setFilters(QgsMapLayerProxyModel.LineLayer)
-            self.mLayerComboBox_recalc_puntos.setFilters(QgsMapLayerProxyModel.PointLayer)
+            self.mLayerComboBox_recalc_lineas.setFilters(QgsMapLayerProxyModel.Filter.LineLayer)
+            self.mLayerComboBox_recalc_puntos.setFilters(QgsMapLayerProxyModel.Filter.PointLayer)
             self.mLayerComboBox_recalc_lineas.setAllowEmptyLayer(True)
             self.mLayerComboBox_recalc_puntos.setAllowEmptyLayer(True)
             # Nombres por defecto para capas de salida (v2.3)
@@ -92,9 +94,14 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             QgsMessageLog.logMessage(
                 f"Error al configurar widgets: {str(e)}", 
                 "YF Tools Plus", 
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
         
+        self.table_to_polygon = TableToPolygon()
+
+        # ── v3.0: pestaña unificada Tabla → Polígono ──
+        self._configurar_v3()
+
         # Cargar configuración guardada
         self.load_config()
 
@@ -102,89 +109,204 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
         """Obtiene la cadena traducida de QGIS."""
         return QCoreApplication.translate('YF_Tools_PlusDialog', message)
 
+    def _configurar_v3(self):
+        """v3.0: elimina la pestaña Excel a CSV y convierte Crear Polígono
+        en Tabla → Polígono (Excel/CSV directo, multi-polígono por campo ID,
+        orden de vértices opcional)."""
+        from qgis.PyQt.QtWidgets import (QGroupBox, QFormLayout, QComboBox,
+                                          QLabel)
+        # 1. Quitar pestañas redundantes (por texto, robusto a índices):
+        #    - "Excel a CSV": absorbida por Tabla → Polígono
+        #    - "Segmentador": duplicaba el Segmentador de Parcelas standalone
+        #      de la suite, que es el mantenido (fix fid GeoPackage, etc.)
+        for texto in ('Excel a CSV',):
+            for i in range(self.tabWidget.count()):
+                if texto in self.tabWidget.tabText(i):
+                    self.tabWidget.removeTab(i)
+                    break
+
+        # 2. Retitular y localizar la pestaña de polígono
+        idx_pol = -1
+        for i in range(self.tabWidget.count()):
+            if 'Pol\u00edgono' in self.tabWidget.tabText(i) or 'Poligono' in self.tabWidget.tabText(i):
+                idx_pol = i
+                self.tabWidget.setTabText(i, "Tabla \u2192 Pol\u00edgono")
+                break
+
+        # 3. Filtro de archivo: Excel + CSV en el mismo selector
+        try:
+            self.mFileWidget_csv_polygon.setFilter(
+                "Tablas (*.xlsx *.xls *.csv);;Excel (*.xlsx *.xls);;CSV (*.csv)")
+        except Exception:
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
+
+        # 3b. Textos heredados del flujo CSV -> ahora tabla universal
+        from qgis.PyQt.QtWidgets import QGroupBox as _QGB, QLabel as _QLB
+        if idx_pol >= 0:
+            page0 = self.tabWidget.widget(idx_pol)
+            for g in page0.findChildren(_QGB):
+                if 'CSV' in g.title():
+                    g.setTitle("Archivo de tabla (Excel o CSV)")
+            for l in page0.findChildren(_QLB):  # noqa: E741
+                t = l.text()
+                if 'Seleccione el archivo CSV' in t:
+                    l.setText("Seleccione la tabla (.xlsx, .xls, .csv):")
+                elif 'al seleccionar un CSV' in t:
+                    l.setText(t.replace('al seleccionar un CSV',
+                                        'al seleccionar la tabla'))
+
+        # 4. Grupo nuevo: hoja + agrupación + orden
+        grp = QGroupBox("Hoja y agrupaci\u00f3n")
+        form = QFormLayout(grp)
+
+        self.cboHojaExcel = QComboBox()
+        self.cboHojaExcel.setToolTip(
+            "<b>Hoja</b><br>Solo para Excel con varias hojas: elige cu\u00e1l "
+            "contiene las coordenadas.")
+        self.lblHojaExcel = QLabel("Hoja del Excel:")
+        form.addRow(self.lblHojaExcel, self.cboHojaExcel)
+        self.lblHojaExcel.setVisible(False)
+        self.cboHojaExcel.setVisible(False)
+
+        self.cboCampoIDPol = QComboBox()
+        self.cboCampoIDPol.setToolTip(
+            "<b>Campo ID de pol\u00edgono</b><br>Si la tabla trae los v\u00e9rtices de "
+            "VARIOS pol\u00edgonos (fracciones, predios), elige la columna que los "
+            "distingue: se dibuja un pol\u00edgono por cada valor. "
+            "D\u00e9jalo en \u2014 Un solo pol\u00edgono \u2014 para el caso simple.")
+        form.addRow("Campo ID de pol\u00edgono:", self.cboCampoIDPol)
+
+        self.cboCampoOrdenPol = QComboBox()
+        self.cboCampoOrdenPol.setToolTip(
+            "<b>Campo de orden</b><br>Columna que define el recorrido de los "
+            "v\u00e9rtices (ID_Vertice, orden). Sin \u00e9l se respeta el orden de "
+            "filas \u2014 si la tabla viene desordenada, el pol\u00edgono saldr\u00e1 "
+            "en estrella.")
+        form.addRow("Campo de orden:", self.cboCampoOrdenPol)
+
+        # Insertar el grupo en la página, después del grupo de coordenadas
+        if idx_pol >= 0:
+            page = self.tabWidget.widget(idx_pol)
+            lay = page.layout()
+            if lay is not None:
+                pos = min(2, lay.count())
+                try:
+                    lay.insertWidget(pos, grp)
+                except Exception:
+                    lay.addWidget(grp)
+
+        # 5. Cambio de hoja recarga los campos
+        self.cboHojaExcel.currentIndexChanged.connect(
+            lambda _i: self.update_csv_fields(
+                self.mFileWidget_csv_polygon.filePath()))
+
+        # 3c. Ventana y traducciones del Segmentador (v3.0 pulido)
+        self.setMinimumSize(700, 780)
+        self.resize(720, 840)
+        from qgis.PyQt.QtWidgets import (QLabel as _L3, QGroupBox as _G3,
+                                          QPushButton as _B3)
+        TRAD = {
+            'Recalculate Attributes of Existing Layers':
+                'Recalcular atributos de capas existentes',
+            'Use after manually editing vertices or segments.':
+                'Usar despu\u00e9s de editar manualmente v\u00e9rtices o segmentos.',
+            'Inherited fields from the source polygon are NOT modified.':
+                'Los campos heredados del pol\u00edgono origen NO se modifican.',
+            'Both layers automatically inherit all fields from the source '
+            'polygon (useful for atlas and map series).':
+                'Ambas capas heredan autom\u00e1ticamente todos los campos del '
+                'pol\u00edgono origen (\u00fatil para atlas y series de mapas).',
+            'Segments layer (lines) to recalculate:':
+                'Capa de segmentos (l\u00edneas) a recalcular:',
+            'Vertices layer (points) to recalculate:':
+                'Capa de v\u00e9rtices (puntos) a recalcular:',
+            'Recalculate Attributes': 'Recalcular atributos',
+        }
+        for w in (self.findChildren(_L3) + self.findChildren(_G3)
+                  + self.findChildren(_B3)):
+            try:
+                t = w.title() if isinstance(w, _G3) else w.text()
+                for en, es in TRAD.items():
+                    if en in t:
+                        t = t.replace(en, es)
+                if isinstance(w, _G3):
+                    w.setTitle(t)
+                else:
+                    w.setText(t)
+            except Exception:
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
+
+    def _hoja_actual(self):
+        if self.cboHojaExcel.isVisible() and self.cboHojaExcel.currentText():
+            return self.cboHojaExcel.currentText()
+        return None
+
     def update_csv_fields(self, filepath):
-        """
-        Actualiza los ComboBox de campos X e Y cuando se selecciona un archivo CSV
-        
-        :param filepath: Ruta al archivo CSV seleccionado
-        :type filepath: str
-        """
+        """v3.0: detecta campos de CUALQUIER tabla (xlsx/xls/csv), maneja
+        hojas de Excel y auto-selecciona X, Y, ID de polígono y orden."""
         try:
             if not filepath or not os.path.exists(filepath):
                 return
-            
-            QgsMessageLog.logMessage(
-                f"Detectando campos en: {filepath}", 
-                "YF Tools Plus", 
-                Qgis.Info
-            )
-            
-            # Obtener campos del CSV
-            fields = self.polygon_creator.get_csv_fields(filepath)
-            
+
+            # Hojas: mostrar el combo solo si el Excel tiene más de una
+            hojas = self.table_to_polygon.get_sheets(filepath)
+            multi = len(hojas) > 1
+            if multi and self.cboHojaExcel.count() == 0 or \
+                    [self.cboHojaExcel.itemText(i)
+                     for i in range(self.cboHojaExcel.count())] != hojas:
+                self.cboHojaExcel.blockSignals(True)
+                self.cboHojaExcel.clear()
+                if multi:
+                    self.cboHojaExcel.addItems(hojas)
+                self.cboHojaExcel.blockSignals(False)
+            self.lblHojaExcel.setVisible(multi)
+            self.cboHojaExcel.setVisible(multi)
+
+            fields = self.table_to_polygon.get_fields(
+                filepath, self._hoja_actual())
             if not fields:
                 QgsMessageLog.logMessage(
-                    "No se pudieron detectar campos en el CSV", 
-                    "YF Tools Plus", 
-                    Qgis.Warning
-                )
+                    "No se pudieron detectar campos en la tabla",
+                    "YF Tools Plus", Qgis.MessageLevel.Warning)
                 return
-            
-            # Guardar el texto actual (si existe)
-            current_x = self.comboBox_x_field.currentText()
-            current_y = self.comboBox_y_field.currentText()
-            
-            # Limpiar y llenar los comboboxes
-            self.comboBox_x_field.clear()
-            self.comboBox_y_field.clear()
-            
-            self.comboBox_x_field.addItems(fields)
-            self.comboBox_y_field.addItems(fields)
-            
-            # Intentar restaurar valores anteriores o detectar automáticamente
-            x_set = False
-            y_set = False
-            
-            # Primero intentar restaurar valores anteriores
-            if current_x:
-                index = self.comboBox_x_field.findText(current_x)
-                if index >= 0:
-                    self.comboBox_x_field.setCurrentIndex(index)
-                    x_set = True
-            
-            if current_y:
-                index = self.comboBox_y_field.findText(current_y)
-                if index >= 0:
-                    self.comboBox_y_field.setCurrentIndex(index)
-                    y_set = True
-            
-            # Si no se restauraron, intentar detección automática
-            if not x_set:
-                for i, field in enumerate(fields):
-                    field_upper = field.upper()
-                    if any(keyword in field_upper for keyword in ['X', 'ESTE', 'EAST', 'LON', 'EASTING', 'E']):
-                        self.comboBox_x_field.setCurrentIndex(i)
-                        break
-            
-            if not y_set:
-                for i, field in enumerate(fields):
-                    field_upper = field.upper()
-                    if any(keyword in field_upper for keyword in ['Y', 'NORTE', 'NORTH', 'LAT', 'NORTHING', 'N']):
-                        self.comboBox_y_field.setCurrentIndex(i)
-                        break
-            
+
+            sug = self.table_to_polygon.autodetectar(fields)
+
+            # X / Y
+            for combo, clave in ((self.comboBox_x_field, 'x'),
+                                 (self.comboBox_y_field, 'y')):
+                actual = combo.currentText()
+                combo.clear()
+                combo.addItems(fields)
+                objetivo = actual if actual in fields else sug[clave]
+                if objetivo:
+                    i = combo.findText(objetivo)
+                    if i >= 0:
+                        combo.setCurrentIndex(i)
+
+            # ID de polígono (opcional) y orden (opcional)
+            for combo, clave, vacio in (
+                    (self.cboCampoIDPol, 'id', "\u2014 Un solo pol\u00edgono \u2014"),
+                    (self.cboCampoOrdenPol, 'orden', "\u2014 Orden de filas \u2014")):
+                actual = combo.currentText()
+                combo.clear()
+                combo.addItem(vacio, None)
+                for f in fields:
+                    combo.addItem(f, f)
+                objetivo = actual if actual in fields else sug[clave]
+                if objetivo:
+                    i = combo.findText(objetivo)
+                    if i >= 0:
+                        combo.setCurrentIndex(i)
+
             QgsMessageLog.logMessage(
-                f"✓ Campos detectados: {', '.join(fields)}", 
-                "YF Tools Plus", 
-                Qgis.Success
-            )
-            
+                "\u2713 Campos detectados: {}".format(", ".join(fields)),
+                "YF Tools Plus", Qgis.MessageLevel.Success)
+
         except Exception as e:
             QgsMessageLog.logMessage(
-                f"Error al actualizar campos: {str(e)}", 
-                "YF Tools Plus", 
-                Qgis.Warning
-            )
+                "Error al actualizar campos: {}".format(e),
+                "YF Tools Plus", Qgis.MessageLevel.Warning)
 
     def refresh_layer_comboboxes(self):
         """Fuerza la actualización de los QgsMapLayerComboBox."""
@@ -202,14 +324,14 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             self.iface.messageBar().pushMessage(
                 "YF Tools Plus",
                 "✓ Listas de capas actualizadas",
-                level=Qgis.Success,
+                level=Qgis.MessageLevel.Success,
                 duration=2
             )
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error al actualizar listas: {str(e)}", 
                 "YF Tools Plus", 
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )
 
     def run_excel_to_csv(self):
@@ -229,7 +351,7 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             QgsMessageLog.logMessage(
                 "Iniciando conversión de Excel a CSV...", 
                 "YF Tools Plus", 
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
             result = self.excel_to_csv.convert(input_file, output_file)
@@ -256,79 +378,62 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             QgsMessageLog.logMessage(
                 f"Error en ExcelToCsv: {str(e)}", 
                 "YF Tools Plus", 
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
 
     def run_create_polygon(self):
-        """Ejecuta la creación de polígonos desde CSV."""
+        """v3.0: crea polígono(s) directo desde la tabla (Excel o CSV)."""
         try:
-            csv_file = self.mFileWidget_csv_polygon.filePath()
+            tabla = self.mFileWidget_csv_polygon.filePath()
             x_field = self.comboBox_x_field.currentText().strip()
             y_field = self.comboBox_y_field.currentText().strip()
             crs = self.mCrsSelector_polygon.crs()
-            
-            if not csv_file:
-                QMessageBox.warning(
-                    self, 
-                    "Advertencia", 
-                    "Debe seleccionar un archivo CSV."
-                )
+
+            if not tabla:
+                QMessageBox.warning(self, "Advertencia",
+                                    "Debe seleccionar un archivo de tabla "
+                                    "(.xlsx, .xls o .csv).")
                 return
-            
             if not x_field or not y_field:
-                QMessageBox.warning(
-                    self, 
-                    "Advertencia", 
-                    "Debe especificar los campos X e Y."
-                )
+                QMessageBox.warning(self, "Advertencia",
+                                    "Debe especificar los campos X e Y.")
                 return
-            
-            QgsMessageLog.logMessage(
-                f"Creando polígono con campos X='{x_field}', Y='{y_field}'", 
-                "YF Tools Plus", 
-                Qgis.Info
-            )
-            
-            # Crear parámetros de estilo por defecto
+            if not crs.isValid():
+                QMessageBox.warning(self, "Advertencia",
+                                    "Seleccione un sistema de coordenadas "
+                                    "v\u00e1lido (ej. EPSG:32719).")
+                return
+
+            field_id = self.cboCampoIDPol.currentData()
+            field_orden = self.cboCampoOrdenPol.currentData()
+
             style_params = {
-                'polygon_color': '#ffffff',
+                'polygon_color': '255,255,255,60',
                 'border_color': '#ff340b',
                 'border_width': '0.26',
                 'label_font': 'Arial',
                 'label_size': '9',
-                'label_color': '#ff340b'
+                'label_color': '#ff340b',
             }
-            
-            result = self.polygon_creator.create_polygon(
-                csv_file, 
-                x_field, 
-                y_field, 
-                crs.authid(), 
-                style_params
-            )
-            
-            if result:
-                QMessageBox.information(
-                    self, 
-                    "Éxito", 
-                    "✓ Polígono creado exitosamente"
-                )
+
+            layer, resumen = self.table_to_polygon.create_polygons(
+                tabla, x_field, y_field, crs.authid(),
+                sheet=self._hoja_actual(),
+                field_id=field_id, field_orden=field_orden,
+                style_params=style_params)
+
+            if layer is not None:
+                QMessageBox.information(self, "Resultado", resumen)
                 self.refresh_layer_comboboxes()
             else:
-                QMessageBox.warning(
-                    self, 
-                    "Advertencia", 
-                    "No se pudo crear el polígono.\n\nRevise el Panel de Registro de Mensajes:\nVer → Paneles → Registro de mensajes → YF Tools Plus"
-                )
-            
+                QMessageBox.warning(self, "Sin resultados", resumen)
+
         except Exception as e:
-            error_msg = f"Error al crear polígono:\n{str(e)}"
-            QMessageBox.critical(self, "Error", error_msg)
+            QMessageBox.critical(self, "Error",
+                                 "Error al crear pol\u00edgono(s):\n{}".format(e))
             QgsMessageLog.logMessage(
-                f"Error en PolygonCreator: {str(e)}", 
-                "YF Tools Plus", 
-                Qgis.Critical
-            )
+                "Error en TableToPolygon: {}".format(e),
+                "YF Tools Plus", Qgis.MessageLevel.Critical)
 
     def run_segmentator(self):
         """Ejecuta la segmentación de polígonos con todas las opciones (v2.3)."""
@@ -352,9 +457,9 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
                     self, "Sin selección",
                     "No hay features seleccionadas.\n\n"
                     "¿Desea procesar todos los polígonos de la capa?",
-                    QMessageBox.Yes | QMessageBox.No
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
-                if resp == QMessageBox.No:
+                if resp == QMessageBox.StandardButton.No:
                     return
                 solo_sel = False
 
@@ -367,7 +472,7 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
                 " | capas: [" + nombre_lin + ", " + nombre_pnt + "]" +
                 " | solo_sel=" + str(solo_sel) +
                 " | huecos=" + str(con_huecos),
-                "YF Tools Plus", Qgis.Info)
+                "YF Tools Plus", Qgis.MessageLevel.Info)
 
             # Mostrar barra de progreso
             self.progressBar_segmento.setVisible(True)
@@ -404,7 +509,7 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
                 self.iface.messageBar().pushMessage(
                     "YF Tools Plus",
                     "\u2714 Segmentaci\u00f3n completada: " + nombre_lin + " / " + nombre_pnt,
-                    level=Qgis.Success, duration=4)
+                    level=Qgis.MessageLevel.Success, duration=4)
                 QMessageBox.information(self, "\u00c9xito", msg)
             else:
                 QMessageBox.warning(self, "Advertencia",
@@ -416,7 +521,7 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             QMessageBox.critical(self, "Error",
                 "Error al segmentar pol\u00edgono:\n" + str(e))
             QgsMessageLog.logMessage(
-                "Error en Segmentator: " + str(e), "YF Tools Plus", Qgis.Critical)
+                "Error en Segmentator: " + str(e), "YF Tools Plus", Qgis.MessageLevel.Critical)
 
     def run_recalcular(self):
         """
@@ -452,7 +557,7 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
                 self.iface.messageBar().pushMessage(
                     "YF Tools Plus",
                     "\u2714 Atributos recalculados correctamente",
-                    level=Qgis.Success,
+                    level=Qgis.MessageLevel.Success,
                     duration=3
                 )
                 QMessageBox.information(self, "Recalculo completado", "\n".join(partes))
@@ -471,7 +576,7 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             )
             QgsMessageLog.logMessage(
                 "Error en run_recalcular: " + str(e),
-                "YF Tools Plus", Qgis.Critical
+                "YF Tools Plus", Qgis.MessageLevel.Critical
             )
 
     def run_export_excel(self):
@@ -497,16 +602,54 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             QgsMessageLog.logMessage(
                 f"Exportando capa: {layer.name()}", 
                 "YF Tools Plus", 
-                Qgis.Info
+                Qgis.MessageLevel.Info
             )
             
+            # Verificar si el destino está bloqueado (abierto en Excel)
+            if os.path.exists(output_path):
+                try:
+                    with open(output_path, 'a'):
+                        pass
+                except (PermissionError, OSError):
+                    QMessageBox.warning(
+                        self, "Archivo en uso",
+                        "El archivo de destino está abierto en Excel u otro "
+                        "programa:\n\n{}\n\nCiérralo y vuelve a exportar."
+                        .format(output_path))
+                    return
+
             self.excel_exporter.export_to_excel(layer, output_path, open_file)
-            
-            msg = f"✓ Exportación completada:\n{output_path}"
+
+            # Verificar que el archivo se creó realmente y no quedó vacío
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                QMessageBox.critical(
+                    self, "Error",
+                    "La exportación no generó un archivo válido:\n{}\n\n"
+                    "Revisa que la capa tenga entidades y que la ruta sea "
+                    "escribible.".format(output_path))
+                return
+
+            kb = os.path.getsize(output_path) / 1024
+            msg = ("Exportación completada.\n\n"
+                   "Capa: {}\nArchivo: {}\nUbicación: {}\nTamaño: {:.1f} KB"
+                   .format(layer.name(), os.path.basename(output_path),
+                           os.path.dirname(output_path), kb))
             if open_file:
-                msg += "\n\n(Archivo abierto automáticamente)"
-            
-            QMessageBox.information(self, "Éxito", msg)
+                msg += "\n\n(Se abrió automáticamente)"
+
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Information)
+            box.setWindowTitle("Éxito")
+            box.setText(msg)
+            btn_carpeta = box.addButton("Abrir carpeta",
+                                        QMessageBox.ButtonRole.ActionRole)
+            box.addButton(QMessageBox.StandardButton.Ok)
+            box.exec()
+            if box.clickedButton() == btn_carpeta:
+                from qgis.PyQt.QtGui import QDesktopServices
+                from qgis.PyQt.QtCore import QUrl
+                QDesktopServices.openUrl(QUrl.fromLocalFile(
+                    os.path.dirname(output_path)))
             
         except Exception as e:
             QMessageBox.critical(
@@ -517,7 +660,7 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             QgsMessageLog.logMessage(
                 f"Error en ExcelExporter: {str(e)}", 
                 "YF Tools Plus", 
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
 
     def save_config(self):
@@ -541,14 +684,14 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             self.iface.messageBar().pushMessage(
                 "YF Tools Plus",
                 "✓ Configuración guardada",
-                level=Qgis.Success,
+                level=Qgis.MessageLevel.Success,
                 duration=2
             )
         except Exception as e:
             QgsMessageLog.logMessage(
                 f"Error al guardar configuración: {str(e)}", 
                 "YF Tools Plus", 
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
 
     def load_config(self):
@@ -590,5 +733,5 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             QgsMessageLog.logMessage(
                 f"Error al cargar configuración: {str(e)}", 
                 "YF Tools Plus", 
-                Qgis.Warning
+                Qgis.MessageLevel.Warning
             )

@@ -11,7 +11,9 @@ El marker persistente queda visible hasta que se elimina manualmente.
 Autor: Yuri Caller - TUCSA / gis-amazonia.pe
 """
 
+import logging
 from qgis.PyQt.QtCore import Qt, QTimer, QObject, pyqtSignal
+from ...core.qt_compat import QVariant_Int, QVariant_Double, QVariant_String
 from qgis.PyQt.QtGui import QColor, QFont
 
 from qgis.core import (
@@ -88,8 +90,8 @@ class FlashAnimation(QObject):
 
     def _spawn_ring(self):
         """Crea un nuevo anillo en la posición."""
-        rb = QgsRubberBand(self.canvas, QgsWkbTypes.PointGeometry)
-        rb.setIcon(QgsRubberBand.ICON_CIRCLE)
+        rb = QgsRubberBand(self.canvas, QgsWkbTypes.GeometryType.PointGeometry)
+        rb.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         rb.setIconSize(2)
         rb.setColor(self.color)
         rb.setWidth(3)
@@ -118,7 +120,7 @@ class FlashAnimation(QObject):
             try:
                 self.canvas.scene().removeItem(ring_data['rb'])
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
         self.rings = []
 
 
@@ -141,7 +143,7 @@ class PersistentMarker:
 
         # Punto principal (cross con outline)
         self.vertex_marker = QgsVertexMarker(canvas)
-        self.vertex_marker.setIconType(QgsVertexMarker.ICON_DOUBLE_TRIANGLE)
+        self.vertex_marker.setIconType(QgsVertexMarker.IconType.ICON_DOUBLE_TRIANGLE)
         self.vertex_marker.setColor(QColor(0, 0, 0))
         self.vertex_marker.setFillColor(self.color)
         self.vertex_marker.setIconSize(14)
@@ -149,8 +151,8 @@ class PersistentMarker:
         self.vertex_marker.setCenter(self.point)
 
         # Rubber band para halo (efecto "highlight")
-        self.halo = QgsRubberBand(canvas, QgsWkbTypes.PointGeometry)
-        self.halo.setIcon(QgsRubberBand.ICON_CIRCLE)
+        self.halo = QgsRubberBand(canvas, QgsWkbTypes.GeometryType.PointGeometry)
+        self.halo.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
         self.halo.setIconSize(20)
         halo_color = QColor(self.color)
         halo_color.setAlpha(60)
@@ -167,15 +169,15 @@ class PersistentMarker:
         try:
             self.canvas.scene().removeItem(self.vertex_marker)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
         try:
             self.canvas.scene().removeItem(self.halo)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
         try:
             self.canvas.scene().removeItem(self.label_item)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     def hide(self):
         self.vertex_marker.hide()
@@ -217,14 +219,14 @@ class NumberedLabelItem(QgsMapCanvasItem):
         return QRectF(-25, -45, 50, 30)
 
     def paint(self, painter, option=None, widget=None):
-        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         # Círculo de fondo con número (offset arriba-derecha del marker)
         cx, cy = 12, -25
         radius = 11
 
         # Sombra
-        painter.setPen(Qt.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(0, 0, 0, 100))
         painter.drawEllipse(QPointF(cx + 1, cy + 1), radius, radius)
 
@@ -241,7 +243,7 @@ class NumberedLabelItem(QgsMapCanvasItem):
         painter.setFont(font)
         painter.drawText(
             QRectF(cx - radius, cy - radius, radius * 2, radius * 2),
-            Qt.AlignCenter, self.text
+            Qt.AlignmentFlag.AlignCenter, self.text
         )
 
 
@@ -308,7 +310,7 @@ class MarkerManager(QObject):
             try:
                 self._active_flashes.remove(flash)
             except ValueError:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
             flash.deleteLater()
 
         flash.finished.connect(_on_finished)
@@ -380,11 +382,11 @@ class MarkerManager(QObject):
         layer = QgsVectorLayer(uri, layer_name, "memory")
         pr = layer.dataProvider()
         pr.addAttributes([
-            QgsField("id", QVariant.Int),
-            QgsField("label", QVariant.String, len=200),
-            QgsField("lat", QVariant.Double),
-            QgsField("lon", QVariant.Double),
-            QgsField("original", QVariant.String, len=200),
+            QgsField("id", QVariant_Int),
+            QgsField("label", QVariant_String, len=200),
+            QgsField("lat", QVariant_Double),
+            QgsField("lon", QVariant_Double),
+            QgsField("original", QVariant_String, len=200),
         ])
         layer.updateFields()
 

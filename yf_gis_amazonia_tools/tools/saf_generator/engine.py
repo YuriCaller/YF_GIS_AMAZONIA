@@ -19,6 +19,7 @@ from qgis.core import (
     QgsField, QgsLineString,
 )
 from qgis.PyQt.QtCore import QVariant
+from ...core.qt_compat import QVariant_Int, QVariant_Double, QVariant_String
 from qgis.PyQt.QtGui import QColor
 
 
@@ -167,15 +168,15 @@ class SAFEngine:
         provider = layer.dataProvider()
 
         provider.addAttributes([
-            QgsField("ID", QVariant.Int),
-            QgsField("PARCELA", QVariant.String),
-            QgsField("ESPECIE", QVariant.String),
-            QgsField("CODIGO", QVariant.Int),
-            QgsField("COLUMNA", QVariant.String),
-            QgsField("FILA", QVariant.Int),
-            QgsField("ID_UNICO", QVariant.String),
-            QgsField("COORD_X", QVariant.Double),
-            QgsField("COORD_Y", QVariant.Double),
+            QgsField("ID", QVariant_Int),
+            QgsField("PARCELA", QVariant_String),
+            QgsField("ESPECIE", QVariant_String),
+            QgsField("CODIGO", QVariant_Int),
+            QgsField("COLUMNA", QVariant_String),
+            QgsField("FILA", QVariant_Int),
+            QgsField("ID_UNICO", QVariant_String),
+            QgsField("COORD_X", QVariant_Double),
+            QgsField("COORD_Y", QVariant_Double),
         ])
         layer.updateFields()
 
@@ -223,8 +224,8 @@ class SAFEngine:
         provider = layer.dataProvider()
 
         provider.addAttributes([
-            QgsField("TIPO", QVariant.String),
-            QgsField("ID", QVariant.Int),
+            QgsField("TIPO", QVariant_String),
+            QgsField("ID", QVariant_Int),
         ])
         layer.updateFields()
 
@@ -287,8 +288,8 @@ class SAFEngine:
             return keys[(bx + by) % len(keys)]
 
         elif method == "ALEATORIO":
-            random.seed(int(x * 1000 + y * 1000))
-            rand_val = random.random() * 100
+            random.seed(int(x * 1000 + y * 1000))  # nosec B311 - patron reproducible, no cripto
+            rand_val = random.random() * 100  # nosec B311
             acc = 0
             for code, prop in proportions.items():
                 acc += prop

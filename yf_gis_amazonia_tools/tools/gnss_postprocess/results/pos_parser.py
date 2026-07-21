@@ -176,12 +176,24 @@ class PosParser:
                 # PPP: usar q=6
                 fix_epochs = [e for e in epochs if e.q == 6]
             if fix_epochs:
-                stats.mean_lat = sum(e.lat for e in fix_epochs) / len(fix_epochs)
-                stats.mean_lon = sum(e.lon for e in fix_epochs) / len(fix_epochs)
-                stats.mean_h   = sum(e.h   for e in fix_epochs) / len(fix_epochs)
-                stats.mean_sdn = self._rms([e.sdn for e in fix_epochs])
-                stats.mean_sde = self._rms([e.sde for e in fix_epochs])
-                stats.mean_sdu = self._rms([e.sdu for e in fix_epochs])
+                # PROMEDIO PONDERADO por inversa de varianza (1/sigma^2)
+                # Igual que TBC — épocas más precisas pesan más.
+                # La media se calcula ponderada; la sigma de precisión
+                # se reporta como la sigma de la media ponderada en METROS.
+                stats.mean_lat, sig_lat = self._weighted_mean(
+                    [(e.lat, e.sdn) for e in fix_epochs])
+                stats.mean_lon, sig_lon = self._weighted_mean(
+                    [(e.lon, e.sde) for e in fix_epochs])
+                stats.mean_h, sig_h = self._weighted_mean(
+                    [(e.h, e.sdu) for e in fix_epochs])
+
+                # Las sigmas de la media ponderada YA están en metros
+                # porque las sdn/sde/sdu de entrada están en metros.
+                # _weighted_mean retorna sqrt(1/sum(1/sigma^2)) que
+                # conserva las unidades de las sigmas de entrada.
+                stats.mean_sdn = sig_lat
+                stats.mean_sde = sig_lon
+                stats.mean_sdu = sig_h
 
         return stats
 
@@ -215,3 +227,29 @@ class PosParser:
         if not vals:
             return 0.0
         return math.sqrt(sum(x**2 for x in vals) / len(vals))
+
+    @staticmethod
+    def _weighted_mean(pairs: list) -> tuple:
+        """
+        Promedio ponderado por inversa de varianza (1/sigma^2).
+        pairs: lista de (valor, sigma) — valor en grados o metros,
+               sigma SIEMPRE en metros (sdn/sde/sdu de RTKLIB).
+        Retorna (media_ponderada, sigma_media_en_metros).
+        La media conserva las unidades del valor; la sigma de salida
+        está en metros (sqrt(1/sum(1/sigma^2))).
+        Igual metodología que Trimble Business Center.
+        """
+        if not pairs:
+            return None, None
+        # Filtrar sigmas cero o negativos (usar mínimo razonable 1mm)
+        valid = [(v, max(s, 0.001)) for v, s in pairs]
+        pesos = [1.0 / (s * s) for _, s in valid]
+        suma_pesos = sum(pesos)
+        if suma_pesos <= 0:
+            # Fallback a promedio simple
+            n = len(valid)
+            return sum(v for v, _ in valid) / n, None
+        media = sum(v * w for (v, _), w in zip(valid, pesos)) / suma_pesos
+        # Sigma de la media ponderada
+        sigma_media = math.sqrt(1.0 / suma_pesos)
+        return media, sigma_media

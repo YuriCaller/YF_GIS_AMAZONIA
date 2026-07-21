@@ -4,6 +4,7 @@ Generación del documento Word - Memoria Descriptiva v3.0
 Formato profesional justificado, tablas con bandas de color.
 """
 
+import logging
 from docx import Document
 from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
@@ -12,6 +13,8 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 import os
 from datetime import datetime
+
+from . import formato_catastral as fc
 
 _MESES = {'January':'enero','February':'febrero','March':'marzo','April':'abril',
           'May':'mayo','June':'junio','July':'julio','August':'agosto',
@@ -24,7 +27,7 @@ def _fecha_es():
 
 def _fnum(v, fmt):
     try: return format(float(v), fmt)
-    except: return str(v)
+    except Exception: return str(v)
 
 # ── XML helpers ───────────────────────────────────────────────────────────────
 
@@ -131,11 +134,12 @@ def generar_documento_word(datos_formulario, datos_procesados, sufijo_archivo=No
 
     _encabezado(doc, datos_formulario, datos_procesados)
     _s_solicitante(doc, datos_formulario)
-    _s_generalidades(doc, datos_formulario.get('generalidades',''))
+    _s_generalidades(doc, datos_formulario)
     _s_ubicacion(doc, datos_formulario.get('ubicacion',{}))
     _s_colindantes(doc, datos_procesados.get('colindantes',{}))
     _s_tecnica(doc, datos_procesados)
     _s_mapa(doc, datos_formulario.get('info_mapa',{}))
+    _s_croquis(doc, datos_procesados.get('mapa_png'))
     _s_firma(doc, datos_formulario)
 
     # ── Ruta de salida ────────────────────────────────────────────────────────
@@ -207,15 +211,31 @@ def _s_solicitante(doc, df):
         r2=p.add_run(val);   r2.font.name='Arial'; r2.font.size=Pt(11); r2.font.bold=True
 
 
-def _s_generalidades(doc, texto):
+def _s_generalidades(doc, df):
+    """Generalidades: texto del usuario si lo dio; si no, redacción técnica
+    parametrizada con método de levantamiento y equipo usado."""
     _heading(doc, 'II.  GENERALIDADES', 1)
+    texto = (df or {}).get('generalidades', '') if isinstance(df, dict) else str(df or '')
+
     if not texto or not texto.strip():
-        texto = ("La presente Memoria Descriptiva tiene por finalidad describir las "
-                 "características técnicas del predio materia del presente trámite, "
-                 "determinando sus linderos, medidas perimétricas, área total, colindantes "
-                 "y demás aspectos técnicos que permitan su correcta identificación y "
-                 "ubicación en el territorio nacional, de acuerdo con las normas "
-                 "técnicas vigentes del SERFOR.")
+        metodo = (df or {}).get('metodo_levantamiento', '') or 'topográfico de campo'
+        equipo = (df or {}).get('equipo_levantamiento', '') or 'equipos GNSS'
+        texto = (
+            "El presente documento constituye la Memoria Descriptiva del plano "
+            "perimétrico adjunto, elaborado con el propósito de precisar los "
+            "linderos, la configuración geométrica y la extensión superficial del "
+            "terreno en cuestión. La información técnica aquí consignada se "
+            "fundamenta en un levantamiento {}, ejecutado mediante {}, "
+            "garantizando la exactitud métrica y el cumplimiento de las normativas "
+            "vigentes en materia de geodesia y cartografía.\n"
+            "Esta memoria tiene por objeto respaldar jurídica y técnicamente la "
+            "delimitación del predio, sustentando su titularidad y proporcionando "
+            "datos verificables para fines catastrales, registrales o "
+            "administrativos, según corresponda. Asimismo, servirá como documento "
+            "base para cualquier trámite legal, urbanístico o de gestión de "
+            "propiedad que derive de los derechos asociados al área descrita."
+        ).format(metodo, equipo)
+
     for i, par in enumerate([p.strip() for p in texto.split('\n') if p.strip()]):
         _pj(doc, par, spb=4 if i==0 else 2, spa=4)
 
@@ -275,7 +295,7 @@ def _s_colindantes(doc, dat):
         _data_row(row, i%2==1)
         row.cells[0].paragraphs[0].alignment=WD_ALIGN_PARAGRAPH.CENTER
         try: row.cells[0].paragraphs[0].runs[0].font.bold=True
-        except: pass
+        except Exception: logging.getLogger(__name__).debug("suppressed", exc_info=True)
         for c in row.cells:
             for r in c.paragraphs[0].runs: r.font.name='Arial'; r.font.size=Pt(10)
     doc.add_paragraph().paragraph_format.space_after=Pt(4)
@@ -312,7 +332,7 @@ def _s_tecnica(doc, dp):
             row.cells[2].text=_fnum(v.get('este',0),',.4f')
             row.cells[3].text=_fnum(v.get('norte',0),',.4f')
             row.cells[4].text=_fnum(v.get('distancia',0),'.2f')
-            row.cells[5].text=_fnum(v.get('azimut',0),'.4f')
+            row.cells[5].text=fc.formato_azimut_tabla(v.get('azimut',0), dp.get('modo_azimut'), dp.get('decimales_azimut'))
             _data_row(row, idx%2==1, center=True)
     else:
         _pj(doc,'No se encontraron vértices. Verifique el campo de relación entre polígonos y puntos.',spb=4,spa=6)
@@ -327,7 +347,7 @@ def _s_tecnica(doc, dp):
         txt=('El predio tiene una superficie total de {:,.4f} hectáreas '
              '({:,.2f} m²) y un perímetro de {:,.2f} metros lineales.{}'.format(
              ah, am2, float(perimetro), nota_fuente))
-    except: txt='Los datos de área y perímetro no están disponibles.'
+    except Exception: txt='Los datos de área y perímetro no están disponibles.'
     _pj(doc, txt, spb=4, spa=6)
 
     t2=doc.add_table(rows=2,cols=2); t2.alignment=WD_TABLE_ALIGNMENT.CENTER; t2.style='Table Grid'
@@ -361,6 +381,29 @@ def _s_mapa(doc, info):
                     c.paragraphs[0].alignment=WD_ALIGN_PARAGRAPH.LEFT
                     for r in c.paragraphs[0].runs: r.font.name='Arial'; r.font.size=Pt(10)
     doc.add_paragraph().paragraph_format.space_after=Pt(8)
+
+
+def _s_croquis(doc, png_path):
+    """VII. Representación gráfica del predio — solo si hay imagen renderizada.
+    La imagen proviene del canvas real del proyecto; si no existe, la sección
+    se omite por completo (nunca se inserta un marcador vacío)."""
+    import os as _os
+    if not png_path or not _os.path.exists(png_path):
+        return
+    _heading(doc, 'VII.  REPRESENTACIÓN GRÁFICA DEL PREDIO', 1)
+    _pj(doc, "El siguiente croquis muestra la ubicación y configuración del predio "
+             "sobre la cartografía de referencia del proyecto. Su carácter es "
+             "referencial; el plano perimétrico adjunto constituye el documento "
+             "técnico oficial.", spb=4, spa=6)
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run()
+    try:
+        # Ancho útil A4: 21.0 - 3.0 - 2.5 = 15.5 cm
+        run.add_picture(png_path, width=Cm(15.5))
+    except Exception:
+        # Imagen corrupta o ilegible: se omite la sección sin romper el doc
+        return
 
 
 def _s_firma(doc, df):

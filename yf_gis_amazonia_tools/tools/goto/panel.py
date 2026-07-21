@@ -75,9 +75,9 @@ class PasteDialog(QDialog):
         layout.addWidget(self.status)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        self.ok_btn = buttons.button(QDialogButtonBox.Ok)
+        self.ok_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self.ok_btn.setText("Usar coordenada")
         self.ok_btn.setEnabled(False)
         buttons.accepted.connect(self.accept)
@@ -157,7 +157,7 @@ class GoToPanel(QDockWidget):
         layout.addWidget(self.tabs)
 
         line = QFrame()
-        line.setFrameShape(QFrame.HLine)
+        line.setFrameShape(QFrame.Shape.HLine)
         layout.addWidget(line)
 
         footer = QLabel(
@@ -165,7 +165,7 @@ class GoToPanel(QDockWidget):
             "Yuri Caller · TUCSA · gis-amazonia.pe<br>"
             "<b>Atajos:</b> Ctrl+G abrir · Enter ir · Esc limpiar</small>"
         )
-        footer.setAlignment(Qt.AlignCenter)
+        footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer.setStyleSheet("color: #888;")
         footer.setWordWrap(True)
         layout.addWidget(footer)
@@ -223,7 +223,7 @@ class GoToPanel(QDockWidget):
             btn.setToolTip(tooltip)
             btn.setCheckable(True)
             btn.setMinimumHeight(30)
-            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             btn.setStyleSheet("""
                 QToolButton {
                     background-color: #ecf0f1; border: 1px solid #bdc3c7;
@@ -437,7 +437,7 @@ class GoToPanel(QDockWidget):
     def _open_paste_dialog(self):
         """Abre el diálogo modal de 'Pegar y detectar'."""
         dlg = PasteDialog(self)
-        if dlg.exec_() == QDialog.Accepted and dlg.parsed is not None:
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.parsed is not None:
             lat = dlg.parsed['lat']
             lon = dlg.parsed['lon']
             fmt = dlg.parsed['format']
@@ -638,7 +638,7 @@ class GoToPanel(QDockWidget):
             if type_str:
                 text = f"[{type_str}] {text}"
             item.setText(text)
-            item.setData(Qt.UserRole, r)
+            item.setData(Qt.ItemDataRole.UserRole, r)
             item.setToolTip(r['name'])
             self.search_results.addItem(item)
 
@@ -656,14 +656,14 @@ class GoToPanel(QDockWidget):
         item = self.search_results.currentItem()
         if item is None:
             return
-        r = item.data(Qt.UserRole)
+        r = item.data(Qt.ItemDataRole.UserRole)
         self.goToRequested.emit(r['lat'], r['lon'], r['name'][:100])
 
     def _on_search_bookmark(self):
         item = self.search_results.currentItem()
         if item is None:
             return
-        r = item.data(Qt.UserRole)
+        r = item.data(Qt.ItemDataRole.UserRole)
         suggested = r['name'].split(',')[0]
         name, ok = QInputDialog.getText(
             self, "Nuevo bookmark", "Nombre:", text=suggested
@@ -741,7 +741,7 @@ class GoToPanel(QDockWidget):
             if b.get('note'):
                 text += f"\n     {b['note'][:60]}"
             item.setText(text)
-            item.setData(Qt.UserRole, i)
+            item.setData(Qt.ItemDataRole.UserRole, i)
             self.bookmarks_list.addItem(item)
 
     def _on_bookmark_selection(self):
@@ -753,7 +753,7 @@ class GoToPanel(QDockWidget):
         item = self.bookmarks_list.currentItem()
         if item is None:
             return
-        self.bookmarkGoTo.emit(item.data(Qt.UserRole))
+        self.bookmarkGoTo.emit(item.data(Qt.ItemDataRole.UserRole))
 
     def _on_bookmark_remove(self):
         item = self.bookmarks_list.currentItem()
@@ -761,10 +761,10 @@ class GoToPanel(QDockWidget):
             return
         reply = QMessageBox.question(
             self, "Confirmar", "¿Eliminar este bookmark?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        if reply == QMessageBox.Yes:
-            self.bookmarkRemove.emit(item.data(Qt.UserRole))
+        if reply == QMessageBox.StandardButton.Yes:
+            self.bookmarkRemove.emit(item.data(Qt.ItemDataRole.UserRole))
 
     # ----------------------------------------------------------------
     # Tab: Markers (sin cambios desde v1.0)
@@ -882,7 +882,7 @@ class GoToPanel(QDockWidget):
             default_utm_band=band,
             parent=self
         )
-        if dlg.exec_() == QDialog.Accepted:
+        if dlg.exec() == QDialog.DialogCode.Accepted:
             results = dlg.get_results()
             if results:
                 self.multiCoordsRequested.emit(results)
@@ -895,7 +895,7 @@ class GoToPanel(QDockWidget):
             text = f"#{m['number']}  {label[:50]}"
             text += f"\n    {format_dd(m['lat'], m['lon'])}"
             item.setText(text)
-            item.setData(Qt.UserRole, i)
+            item.setData(Qt.ItemDataRole.UserRole, i)
             self.markers_list.addItem(item)
 
     def _on_marker_selection(self):
@@ -907,13 +907,13 @@ class GoToPanel(QDockWidget):
         item = self.markers_list.currentItem()
         if item is None:
             return
-        self.markerGoTo.emit(item.data(Qt.UserRole))
+        self.markerGoTo.emit(item.data(Qt.ItemDataRole.UserRole))
 
     def _on_marker_remove(self):
         item = self.markers_list.currentItem()
         if item is None:
             return
-        self.markerRemove.emit(item.data(Qt.UserRole))
+        self.markerRemove.emit(item.data(Qt.ItemDataRole.UserRole))
 
     def _on_clear_all(self):
         if self.markers_list.count() == 0:
@@ -921,9 +921,9 @@ class GoToPanel(QDockWidget):
         reply = QMessageBox.question(
             self, "Confirmar",
             f"¿Eliminar los {self.markers_list.count()} markers?",
-            QMessageBox.Yes | QMessageBox.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self.markersClearAll.emit()
 
     def _on_to_layer(self):
@@ -938,11 +938,11 @@ class GoToPanel(QDockWidget):
             "<b>¿Qué tipo de capa quieres crear?</b><br><br>"
             "<b>Sí</b> = Capa temporal en memoria<br>"
             "<b>No</b> = GeoPackage permanente (recomendado)",
-            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
         )
-        if reply == QMessageBox.Cancel:
+        if reply == QMessageBox.StandardButton.Cancel:
             return
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes:
             self.markersToLayer.emit(True, "")
         else:
             file_path, _ = QFileDialog.getSaveFileName(

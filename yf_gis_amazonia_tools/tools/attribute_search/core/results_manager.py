@@ -20,6 +20,7 @@
  ***************************************************************************/
 """
 
+import logging
 import os
 import csv
 import pandas as pd
@@ -28,6 +29,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 from qgis.PyQt.QtCore import QObject, pyqtSignal, QVariant, QSettings, QTimer
+from ....core.qt_compat import QVariant_Int, QVariant_Double, QVariant_String
 from qgis.PyQt.QtGui import QColor
 
 from qgis.core import (
@@ -168,15 +170,15 @@ class ResultsManager(QObject):
                 
                 if geometry:
                     # Create rubber band based on geometry type
-                    if layer.geometryType() == QgsWkbTypes.PointGeometry:
-                        rubber_band = QgsRubberBand(canvas, QgsWkbTypes.PointGeometry)
-                        rubber_band.setIcon(QgsRubberBand.ICON_CIRCLE)
+                    if layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry:
+                        rubber_band = QgsRubberBand(canvas, QgsWkbTypes.GeometryType.PointGeometry)
+                        rubber_band.setIcon(QgsRubberBand.IconType.ICON_CIRCLE)
                         rubber_band.setIconSize(10)
-                    elif layer.geometryType() == QgsWkbTypes.LineGeometry:
-                        rubber_band = QgsRubberBand(canvas, QgsWkbTypes.LineGeometry)
+                    elif layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry:
+                        rubber_band = QgsRubberBand(canvas, QgsWkbTypes.GeometryType.LineGeometry)
                         rubber_band.setWidth(2)
                     else:
-                        rubber_band = QgsRubberBand(canvas, QgsWkbTypes.PolygonGeometry)
+                        rubber_band = QgsRubberBand(canvas, QgsWkbTypes.GeometryType.PolygonGeometry)
                     
                     # Set color with transparency
                     color = QColor(self.highlight_color)
@@ -333,10 +335,10 @@ class ResultsManager(QObject):
             
             # Add fields
             temp_provider.addAttributes([
-                QgsField("layer_name", QVariant.String),
-                QgsField("feature_id", QVariant.Int),
-                QgsField("field_name", QVariant.String),
-                QgsField("field_value", QVariant.String)
+                QgsField("layer_name", QVariant_String),
+                QgsField("feature_id", QVariant_Int),
+                QgsField("field_name", QVariant_String),
+                QgsField("field_value", QVariant_String)
             ])
             temp_layer.updateFields()
             
@@ -396,9 +398,9 @@ class ResultsManager(QObject):
         
         # Group features by geometry type
         features_by_type = {
-            QgsWkbTypes.PointGeometry: [],
-            QgsWkbTypes.LineGeometry: [],
-            QgsWkbTypes.PolygonGeometry: []
+            QgsWkbTypes.GeometryType.PointGeometry: [],
+            QgsWkbTypes.GeometryType.LineGeometry: [],
+            QgsWkbTypes.GeometryType.PolygonGeometry: []
         }
         
         for result in results:
@@ -415,12 +417,12 @@ class ResultsManager(QObject):
                 
                 if geometry:
                     # Add to appropriate list
-                    if layer.geometryType() == QgsWkbTypes.PointGeometry:
-                        features_by_type[QgsWkbTypes.PointGeometry].append((feature, layer, result))
-                    elif layer.geometryType() == QgsWkbTypes.LineGeometry:
-                        features_by_type[QgsWkbTypes.LineGeometry].append((feature, layer, result))
+                    if layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry:
+                        features_by_type[QgsWkbTypes.GeometryType.PointGeometry].append((feature, layer, result))
+                    elif layer.geometryType() == QgsWkbTypes.GeometryType.LineGeometry:
+                        features_by_type[QgsWkbTypes.GeometryType.LineGeometry].append((feature, layer, result))
                     else:
-                        features_by_type[QgsWkbTypes.PolygonGeometry].append((feature, layer, result))
+                        features_by_type[QgsWkbTypes.GeometryType.PolygonGeometry].append((feature, layer, result))
         
         # Create layers for each geometry type
         created_layers = []
@@ -430,10 +432,10 @@ class ResultsManager(QObject):
                 continue
             
             # Determine geometry type string
-            if geom_type == QgsWkbTypes.PointGeometry:
+            if geom_type == QgsWkbTypes.GeometryType.PointGeometry:
                 geom_str = "Point"
                 type_name = "Puntos"
-            elif geom_type == QgsWkbTypes.LineGeometry:
+            elif geom_type == QgsWkbTypes.GeometryType.LineGeometry:
                 geom_str = "LineString"
                 type_name = "Líneas"
             else:
@@ -450,10 +452,10 @@ class ResultsManager(QObject):
             # Add fields
             provider = new_layer.dataProvider()
             provider.addAttributes([
-                QgsField("layer_name", QVariant.String),
-                QgsField("feature_id", QVariant.Int),
-                QgsField("field_name", QVariant.String),
-                QgsField("field_value", QVariant.String)
+                QgsField("layer_name", QVariant_String),
+                QgsField("feature_id", QVariant_Int),
+                QgsField("field_name", QVariant_String),
+                QgsField("field_value", QVariant_String)
             ])
             new_layer.updateFields()
             
@@ -534,7 +536,7 @@ class ResultsManager(QObject):
             try:
                 numeric_values.append(float(value))
             except (ValueError, TypeError):
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
         
         if numeric_values:
             stats['numeric'] = {

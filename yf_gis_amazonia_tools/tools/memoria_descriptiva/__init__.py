@@ -9,6 +9,7 @@ Tres modos de trabajo:
   - ATLAS SELECCIÓN: 1 memoria por cada polígono SELECCIONADO en QGIS
 """
 
+import logging
 import os
 import sys
 import traceback
@@ -86,7 +87,7 @@ class Tool(BaseTool):
         self._cargar_capas()
         self._autodetectar_crs()
         self.dlg.show()
-        self.dlg.exec_()
+        self.dlg.exec()
 
     def unload(self):
         if self.dlg:
@@ -160,7 +161,7 @@ class Tool(BaseTool):
                 if w and not w.text():
                     w.setText(info.get(key, ""))
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     def _select_output(self):
         from qgis.PyQt.QtWidgets import QFileDialog
@@ -229,7 +230,7 @@ class Tool(BaseTool):
         total = len(features)
         prog = QProgressDialog("Generando memorias...", "Cancelar", 0, total, self.dlg)
         prog.setWindowTitle("Memoria Descriptiva")
-        prog.setWindowModality(Qt.WindowModal)
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
         prog.setMinimumDuration(0)
         prog.setValue(0)
         prog.show()
@@ -260,6 +261,7 @@ class Tool(BaseTool):
                     "campo_norte": datos["campos"]["campo_norte"],
                     "campo_distancia": datos["campos"]["campo_distancia"],
                     "campo_azimut": datos["campos"]["campo_azimut"],
+                    "patron_vertice": datos["campos"].get("patron_vertice") or "V-{n}",
                 }
                 vertices = obtener_vertices_de_poligono(pnt_layer, id_pol, campos_puntos)
 
@@ -282,15 +284,24 @@ class Tool(BaseTool):
                 if not any(v for v in datos.get("info_mapa", {}).values()):
                     datos["info_mapa"] = obtener_info_sistema_coordenadas(pol_layer)
 
+                fmt_az = datos.get("formato_azimut") or ("decimal", 1)
                 dp = {
                     "vertices": vertices,
                     "area": ap["area"],
                     "perimetro": ap["perimetro"],
                     "fuente_area": ap["fuente_area"],
                     "colindantes": colindantes,
-                    "descripcion_linderos": generar_descripcion_linderos(vertices),
+                    "descripcion_linderos": generar_descripcion_linderos(
+                        vertices, fmt_az[0], fmt_az[1]),
                     "nombre_propietario": nombre_prop,
+                    "modo_azimut": fmt_az[0],
+                    "decimales_azimut": fmt_az[1],
                 }
+
+                # Croquis del predio (Fase 2): render del canvas encuadrado
+                # al polígono, con las capas y estilo actuales del proyecto
+                if datos.get("incluir_mapa"):
+                    dp["mapa_png"] = self._render_mapa_predio(feature, pol_layer)
 
                 datos_doc = dict(datos)
                 datos_doc["_nombre_propietario_actual"] = nombre_prop
@@ -298,6 +309,14 @@ class Tool(BaseTool):
 
                 out = generar_documento_word(datos_doc, dp, sufijo_archivo=sufijo)
                 generados.append((nombre_prop or "predio_{}".format(i + 1), out))
+
+                # Limpieza del croquis temporal
+                png_tmp = dp.get("mapa_png")
+                if png_tmp and os.path.exists(png_tmp):
+                    try:
+                        os.remove(png_tmp)
+                    except OSError:
+                        logging.getLogger(__name__).debug("suppressed", exc_info=True)
                 log_info("Memoria generada: {} -> {}".format(nombre_prop, os.path.basename(out)))
 
             except Exception as e:
@@ -324,6 +343,17 @@ class Tool(BaseTool):
                 if len(errores) > 5:
                     msg += "<i>... y {} errores más (ver consola de Python para detalles)</i><br>".format(len(errores) - 5)
             QMessageBox.information(self.dlg, "Completado", msg)
+
+            # Auto-apertura del resultado (Fase 2): feedback inmediato
+            try:
+                from qgis.PyQt.QtGui import QDesktopServices
+                from qgis.PyQt.QtCore import QUrl
+                destino_abrir = (generados[0][1] if len(generados) == 1
+                                 else carpeta)   # 1 doc: Word; atlas: carpeta
+                QDesktopServices.openUrl(QUrl.fromLocalFile(destino_abrir))
+            except Exception as e:
+                log_error("No se pudo abrir el resultado: {}".format(e))
+
             if not es_atlas:
                 self.dlg.accept()
         else:
@@ -335,6 +365,47 @@ class Tool(BaseTool):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _render_mapa_predio(self, feature, pol_layer, ancho=1600, alto=1200):
+        """Renderiza el canvas actual encuadrado al predio (margen 30%) a un
+        PNG temporal. Usa las capas visibles del proyecto tal cual están:
+        nunca se dibuja información que no exista en el proyecto.
+        Devuelve la ruta del PNG o None si el render falla."""
+        try:
+            import tempfile
+            from qgis.core import (QgsMapRendererSequentialJob, QgsMapSettings,
+                                   QgsCoordinateTransform, QgsProject)
+            from qgis.PyQt.QtCore import QSize
+
+            canvas = self.iface.mapCanvas()
+            settings = QgsMapSettings(canvas.mapSettings())  # clon: no tocar el canvas vivo
+
+            extent = feature.geometry().boundingBox()
+            # Reproyectar el bbox si el CRS de la capa difiere del canvas
+            if pol_layer.crs() != settings.destinationCrs():
+                tr = QgsCoordinateTransform(
+                    pol_layer.crs(), settings.destinationCrs(), QgsProject.instance())
+                extent = tr.transformBoundingBox(extent)
+            extent.scale(1.3)
+            settings.setExtent(extent)
+            settings.setOutputSize(QSize(ancho, alto))
+
+            job = QgsMapRendererSequentialJob(settings)
+            job.start()
+            job.waitForFinished()
+            img = job.renderedImage()
+            if img.isNull():
+                log_warning("Render del croquis devolvió imagen vacía")
+                return None
+
+            fd, png = tempfile.mkstemp(suffix='.png', prefix='croquis_')
+            os.close(fd)
+            img.save(png, 'PNG')
+            log_info("Croquis renderizado: {}".format(png))
+            return png
+        except Exception as e:
+            log_error("No se pudo renderizar el croquis: {}".format(e))
+            return None
 
     def _obtener_id_poligono(self, feature, pol_layer, datos):
         campo_id = datos["relacion"]["campo_id_poligono"]

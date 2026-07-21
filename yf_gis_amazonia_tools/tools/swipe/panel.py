@@ -16,6 +16,7 @@ Secciones:
 Autor: Yuri Caller - TUCSA / gis-amazonia.pe
 """
 
+import logging
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
@@ -83,14 +84,14 @@ class SwipePanel(QDockWidget):
         self.mode_swipe_btn.setCheckable(True)
         self.mode_swipe_btn.setChecked(True)
         self.mode_swipe_btn.setMinimumHeight(30)
-        self.mode_swipe_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.mode_swipe_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.mode_swipe_btn.setToolTip("Divisor arrastrable horizontal o vertical")
 
         self.mode_magnifier_btn = QToolButton()
         self.mode_magnifier_btn.setText("◯  Lupa")
         self.mode_magnifier_btn.setCheckable(True)
         self.mode_magnifier_btn.setMinimumHeight(30)
-        self.mode_magnifier_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.mode_magnifier_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.mode_magnifier_btn.setToolTip("Círculo que sigue al cursor (use +/- para ajustar tamaño)")
 
         mode_style = """
@@ -163,13 +164,13 @@ class SwipePanel(QDockWidget):
         self.dir_horizontal_btn.setCheckable(True)
         self.dir_horizontal_btn.setChecked(True)
         self.dir_horizontal_btn.setMinimumHeight(32)
-        self.dir_horizontal_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.dir_horizontal_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self.dir_vertical_btn = QToolButton()
         self.dir_vertical_btn.setText("⇅  Vertical")
         self.dir_vertical_btn.setCheckable(True)
         self.dir_vertical_btn.setMinimumHeight(32)
-        self.dir_vertical_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.dir_vertical_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         dir_btn_style = """
             QToolButton {
@@ -197,14 +198,14 @@ class SwipePanel(QDockWidget):
         pos_group = QGroupBox("Posición del Divisor")
         pos_layout = QVBoxLayout(pos_group)
 
-        self.pos_slider = QSlider(Qt.Horizontal)
+        self.pos_slider = QSlider(Qt.Orientation.Horizontal)
         self.pos_slider.setMinimum(0)
         self.pos_slider.setMaximum(1000)
         self.pos_slider.setValue(500)
         pos_layout.addWidget(self.pos_slider)
 
         self.pos_label = QLabel("50%")
-        self.pos_label.setAlignment(Qt.AlignCenter)
+        self.pos_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.pos_label.setStyleSheet("color: #2980b9; font-weight: bold;")
         pos_layout.addWidget(self.pos_label)
 
@@ -234,14 +235,14 @@ class SwipePanel(QDockWidget):
         hint_label.setStyleSheet("color: #555; font-size: 10pt;")
         magn_layout.addWidget(hint_label)
 
-        self.radius_slider = QSlider(Qt.Horizontal)
+        self.radius_slider = QSlider(Qt.Orientation.Horizontal)
         self.radius_slider.setMinimum(30)
         self.radius_slider.setMaximum(500)
         self.radius_slider.setValue(150)
         magn_layout.addWidget(self.radius_slider)
 
         self.radius_label = QLabel("150 px")
-        self.radius_label.setAlignment(Qt.AlignCenter)
+        self.radius_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.radius_label.setStyleSheet("color: #16a085; font-weight: bold;")
         magn_layout.addWidget(self.radius_label)
 
@@ -261,14 +262,14 @@ class SwipePanel(QDockWidget):
         opacity_hint.setStyleSheet("color: #555; font-size: 10pt;")
         opacity_layout.addWidget(opacity_hint)
 
-        self.opacity_slider = QSlider(Qt.Horizontal)
+        self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self.opacity_slider.setMinimum(0)
         self.opacity_slider.setMaximum(100)
         self.opacity_slider.setValue(100)
         opacity_layout.addWidget(self.opacity_slider)
 
         self.opacity_label = QLabel("Opacidad: 100%")
-        self.opacity_label.setAlignment(Qt.AlignCenter)
+        self.opacity_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.opacity_label.setStyleSheet("color: #8e44ad; font-weight: bold;")
         opacity_layout.addWidget(self.opacity_label)
 
@@ -289,8 +290,8 @@ class SwipePanel(QDockWidget):
 
         # ---- Footer ----
         line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(line)
 
         footer = QLabel(
@@ -298,7 +299,7 @@ class SwipePanel(QDockWidget):
             "Yuri Caller · TUCSA · gis-amazonia.pe<br>"
             "<b>Atajos:</b> ←→↑↓ mover · Shift acelera · +/- radio · Ctrl+S exportar</small>"
         )
-        footer.setAlignment(Qt.AlignCenter)
+        footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer.setStyleSheet("color: #888;")
         footer.setWordWrap(True)
         layout.addWidget(footer)
@@ -323,7 +324,7 @@ class SwipePanel(QDockWidget):
         self.layer_combo.clear()
 
         layers = QgsProject.instance().mapLayers().values()
-        layers = sorted(layers, key=lambda l: l.name().lower())
+        layers = sorted(layers, key=lambda l: l.name().lower())  # noqa: E741
 
         for layer in layers:
             icon = self._icon_for_layer(layer)
@@ -339,21 +340,21 @@ class SwipePanel(QDockWidget):
 
     def _icon_for_layer(self, layer):
         try:
-            if layer.type() == QgsMapLayer.RasterLayer:
+            if layer.type() == QgsMapLayer.LayerType.RasterLayer:
                 return QIcon(":/images/themes/default/mIconRaster.svg")
-            elif layer.type() == QgsMapLayer.VectorLayer:
+            elif layer.type() == QgsMapLayer.LayerType.VectorLayer:
                 from qgis.core import QgsWkbTypes
                 gt = layer.geometryType()
-                if gt == QgsWkbTypes.PointGeometry:
+                if gt == QgsWkbTypes.GeometryType.PointGeometry:
                     return QIcon(":/images/themes/default/mIconPointLayer.svg")
-                elif gt == QgsWkbTypes.LineGeometry:
+                elif gt == QgsWkbTypes.GeometryType.LineGeometry:
                     return QIcon(":/images/themes/default/mIconLineLayer.svg")
-                elif gt == QgsWkbTypes.PolygonGeometry:
+                elif gt == QgsWkbTypes.GeometryType.PolygonGeometry:
                     return QIcon(":/images/themes/default/mIconPolygonLayer.svg")
-            elif layer.type() == QgsMapLayer.MeshLayer:
+            elif layer.type() == QgsMapLayer.LayerType.MeshLayer:
                 return QIcon(":/images/themes/default/mIconMeshLayer.svg")
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
         return QIcon()
 
     def _on_toggle(self, checked):
@@ -456,7 +457,7 @@ class SwipePanel(QDockWidget):
                 if idx >= 0:
                     self.layer_combo.setCurrentIndex(idx)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     def swap_to_next_layer(self):
         """Cambia al siguiente layer del combo (envoltorio)."""

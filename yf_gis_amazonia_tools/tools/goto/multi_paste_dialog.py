@@ -155,9 +155,9 @@ class MultiPasteDialog(QDialog):
         layout.addWidget(preview_group)
 
         # ---- Botones ----
-        button_box = QDialogButtonBox(QDialogButtonBox.Cancel)
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
         self.ok_btn = button_box.addButton(
-            "✓  Crear markers", QDialogButtonBox.AcceptRole
+            "✓  Crear markers", QDialogButtonBox.ButtonRole.AcceptRole
         )
         self.ok_btn.setStyleSheet("""
             QPushButton {
@@ -250,8 +250,8 @@ class MultiPasteDialog(QDialog):
 
                 if -90 <= lat <= 90 and -180 <= lon <= 180:
                     results.append((lat, lon, label))
-            except Exception as e:
-                continue
+            except Exception:  # nosec B112 - fila malformada: se omite a proposito
+                continue  # nosec B112 - entrada malformada: se omite a proposito
 
         if not results:
             self.type_label.setText(

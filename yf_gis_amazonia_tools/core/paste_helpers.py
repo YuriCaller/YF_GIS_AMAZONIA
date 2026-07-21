@@ -13,6 +13,7 @@ Casos típicos:
 Autor: Yuri Caller - TUCSA / gis-amazonia.pe
 """
 
+import logging
 import re
 
 
@@ -83,13 +84,13 @@ def _extract_numbers(text):
                 val = float(normalized)
                 results.append(val)
             except ValueError:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
         else:
             try:
                 val = float(m)
                 results.append(val)
             except ValueError:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     return results
 
@@ -110,7 +111,7 @@ def _find_value_after_keyword(text, keywords):
                 val_str = m.group(1).replace(',', '.')
                 return float(val_str)
             except ValueError:
-                continue
+                continue  # nosec B112 - entrada malformada: se omite a proposito
     return None
 
 
@@ -161,7 +162,7 @@ def extract_multiple_pairs(text):
 
     # Estrategia 1: por líneas (con separadores variados)
     line_splits = re.split(r'[\r\n;]+', text)
-    line_splits = [l.strip() for l in line_splits if l.strip()]
+    line_splits = [l.strip() for l in line_splits if l.strip()]  # noqa: E741
 
     for line in line_splits:
         # Para múltiples líneas, ser ESTRICTO: solo aceptar números plausibles

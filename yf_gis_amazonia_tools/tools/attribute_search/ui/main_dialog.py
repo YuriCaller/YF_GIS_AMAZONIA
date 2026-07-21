@@ -20,13 +20,18 @@
  ***************************************************************************/
 """
 
+import logging
 import os
 
+try:
+    from qgis.PyQt.QtGui import QAction        # Qt6: QAction vive en QtGui
+except ImportError:
+    from qgis.PyQt.QtWidgets import QAction    # Qt5: QAction vive en QtWidgets
 from qgis.PyQt.QtWidgets import (
     QDockWidget, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QSplitter, QTreeWidget, QTreeWidgetItem,
     QTableWidget, QTableWidgetItem, QComboBox, QCheckBox, QLineEdit,
-    QGroupBox, QRadioButton, QToolBar, QAction, QMenu, QHeaderView,
+    QGroupBox, QRadioButton, QToolBar, QMenu, QHeaderView,
     QMessageBox, QFileDialog, QToolButton, QSizePolicy
 )
 from qgis.PyQt.QtCore import Qt, pyqtSignal, QSettings, QSize
@@ -64,7 +69,7 @@ class MainDialog(QDockWidget):
         """Set up the user interface."""
         self.setWindowTitle("Búsqueda Avanzada de Atributos")
         self.setMinimumSize(800, 600)
-        self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         
         # Main widget and layout
         self.main_widget = QWidget()
@@ -75,7 +80,7 @@ class MainDialog(QDockWidget):
         # Toolbar
         self.toolbar = QToolBar()
         self.toolbar.setIconSize(QSize(24, 24))
-        self.toolbar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         
         # Add toolbar actions
         self.action_new_search = QAction(
@@ -124,8 +129,12 @@ class MainDialog(QDockWidget):
         self.tab_widget.addTab(self.results_panel, "Resultados")
         self.tab_widget.addTab(self.report_panel, "Reportes")
         self.tab_widget.addTab(self.settings_panel, "Configuración")
+
+        from qgis.PyQt.QtWidgets import QSizePolicy as _QSP
+        self.tab_widget.setSizePolicy(_QSP.Policy.Expanding,
+                                      _QSP.Policy.Expanding)
         
-        self.main_layout.addWidget(self.tab_widget)
+        self.main_layout.addWidget(self.tab_widget, 1)  # stretch: llena el alto disponible
         
         # Status bar
         self.status_bar = QWidget()
@@ -136,7 +145,7 @@ class MainDialog(QDockWidget):
         self.status_layout.addWidget(self.status_label)
         
         self.results_count_label = QLabel("0 resultados")
-        self.status_layout.addWidget(self.results_count_label, 0, Qt.AlignRight)
+        self.status_layout.addWidget(self.results_count_label, 0, Qt.AlignmentFlag.AlignRight)
         
         self.main_layout.addWidget(self.status_bar)
         
@@ -173,9 +182,15 @@ class MainDialog(QDockWidget):
             self.restoreGeometry(geometry)
         
         # Restore dock location
-        area = settings.value("dockArea", Qt.RightDockWidgetArea)
+        area = settings.value("dockArea", Qt.DockWidgetArea.RightDockWidgetArea)
         if area:
-            self.iface.mainWindow().addDockWidget(int(area), self)
+            # PyQt6 rechaza ints donde espera enums; convertir de forma
+            # compatible (en PyQt5 Qt.DockWidgetArea(int) devuelve el int válido)
+            try:
+                area = Qt.DockWidgetArea(int(area))
+            except (TypeError, ValueError):
+                area = Qt.DockWidgetArea.RightDockWidgetArea
+            self.iface.mainWindow().addDockWidget(area, self)
         
         # Restore current tab
         current_tab = settings.value("currentTab", 0)
@@ -185,25 +200,39 @@ class MainDialog(QDockWidget):
         settings.endGroup()
     
     def save_settings(self):
-        """Save settings to QSettings."""
-        settings = QSettings()
-        settings.beginGroup("QGISAttributeSearch")
-        
-        # Save geometry
-        settings.setValue("geometry", self.saveGeometry())
-        
-        # Save dock location
-        settings.setValue("dockArea", self.iface.mainWindow().dockWidgetArea(self))
-        
-        # Save current tab
-        settings.setValue("currentTab", self.tab_widget.currentIndex())
-        
-        settings.endGroup()
-    
+        """Save settings to QSettings — defensivo contra widgets destruidos."""
+        try:
+            settings = QSettings()
+            settings.beginGroup("QGISAttributeSearch")
+            try:
+                settings.setValue("geometry", self.saveGeometry())
+            except RuntimeError:
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
+            try:
+                _a = self.iface.mainWindow().dockWidgetArea(self)
+                # guardar como int plano: round-trip seguro en PyQt5 y PyQt6
+                settings.setValue("dockArea", int(getattr(_a, "value", _a)))
+            except RuntimeError:
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
+            try:
+                tab_index = self.tab_widget.currentIndex()
+                settings.setValue("currentTab", tab_index)
+            except RuntimeError:
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)  # tab_widget C++ ya destruido — sin crash
+            settings.endGroup()
+        except Exception:
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
+
     def closeEvent(self, event):
         """Handle close event."""
-        self.save_settings()
-        self.closingPlugin.emit()
+        try:
+            self.save_settings()
+        except Exception:
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
+        try:
+            self.closingPlugin.emit()
+        except Exception:
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
         event.accept()
     
     def setCurrentTab(self, index):

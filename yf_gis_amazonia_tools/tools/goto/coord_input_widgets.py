@@ -10,8 +10,9 @@ Cada widget hereda de CoordInputBase y debe implementar:
 Autor: Yuri Caller - TUCSA / gis-amazonia.pe
 """
 
-from qgis.PyQt.QtCore import Qt, pyqtSignal, QRegExp
-from qgis.PyQt.QtGui import QFont, QDoubleValidator, QIntValidator, QRegExpValidator
+import logging
+from qgis.PyQt.QtCore import Qt, pyqtSignal, QRegularExpression
+from qgis.PyQt.QtGui import QFont, QDoubleValidator, QIntValidator, QRegularExpressionValidator
 from qgis.PyQt.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox, QFormLayout
@@ -477,7 +478,7 @@ class UTMInputWidget(CoordInputBase):
                     self.northing_spin.blockSignals(False)
                 self.coordinatesChanged.emit()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     def set_detection_info(self, text):
         """Muestra mensaje sobre la detección auto del CRS."""
@@ -535,7 +536,7 @@ class UTMInputWidget(CoordInputBase):
                 self.easting_spin.blockSignals(False)
                 self.northing_spin.blockSignals(False)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     def clear(self):
         self.easting_spin.setValue(500000)
@@ -613,7 +614,7 @@ class MGRSInputWidget(CoordInputBase):
         self.east_edit.setMaximumWidth(120)
         self.east_edit.setFont(self._mono_font)
         # Solo dígitos, hasta 5
-        val = QRegExpValidator(QRegExp(r'\d{0,5}'), self)
+        val = QRegularExpressionValidator(QRegularExpression(r'\d{0,5}'), self)
         self.east_edit.setValidator(val)
         self.east_edit.setText("79428")
         self.east_edit.setPlaceholderText("0-99999")
@@ -624,7 +625,7 @@ class MGRSInputWidget(CoordInputBase):
         self.north_edit.setMinimumHeight(28)
         self.north_edit.setMaximumWidth(120)
         self.north_edit.setFont(self._mono_font)
-        val2 = QRegExpValidator(QRegExp(r'\d{0,5}'), self)
+        val2 = QRegularExpressionValidator(QRegularExpression(r'\d{0,5}'), self)
         self.north_edit.setValidator(val2)
         self.north_edit.setText("07821")
         self.north_edit.setPlaceholderText("0-99999")
@@ -687,7 +688,7 @@ class MGRSInputWidget(CoordInputBase):
                 self.zone_spin.blockSignals(False)
                 self.band_combo.blockSignals(False)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     def clear(self):
         self.east_edit.clear()

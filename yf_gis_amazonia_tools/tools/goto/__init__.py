@@ -15,9 +15,14 @@ Replica e integra la funcionalidad "Go To XY" de ArcGIS Pro:
 Integrado en YF GIS Amazonia Tools v2.0.
 """
 
+import logging
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QKeySequence
-from qgis.PyQt.QtWidgets import QShortcut, QMessageBox
+try:
+    from qgis.PyQt.QtGui import QShortcut       # Qt6: QShortcut vive en QtGui
+except ImportError:
+    from qgis.PyQt.QtWidgets import QShortcut   # Qt5: QShortcut vive en QtWidgets
+from qgis.PyQt.QtWidgets import QMessageBox
 
 from qgis.core import (
     QgsProject, QgsPointXY, QgsCoordinateReferenceSystem,
@@ -60,20 +65,20 @@ class Tool(BaseTool):
                 QgsProject.instance().crsChanged.disconnect(self._on_project_crs_changed)
                 self._crs_listener_connected = False
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
         if self.marker_manager:
             try:
                 self.marker_manager.clear_all()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
             self.marker_manager = None
 
         if self.geocoder:
             try:
                 self.geocoder.cancel()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
             self.geocoder = None
 
         if self.panel is not None:
@@ -81,7 +86,7 @@ class Tool(BaseTool):
                 self.iface.removeDockWidget(self.panel)
                 self.panel.deleteLater()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
             self.panel = None
 
         if self.shortcut is not None:
@@ -89,7 +94,7 @@ class Tool(BaseTool):
                 self.shortcut.setParent(None)
                 self.shortcut.deleteLater()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
             self.shortcut = None
 
     # ------------------------------------------------------------------
@@ -110,7 +115,7 @@ class Tool(BaseTool):
 
         if self.panel is None:
             self.panel = GoToPanel(self.iface, self.iface.mainWindow())
-            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.panel)
+            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.panel)
             self._connect_signals()
             self._refresh_bookmarks()
             self._refresh_markers()
@@ -121,7 +126,7 @@ class Tool(BaseTool):
                 QgsProject.instance().crsChanged.connect(self._on_project_crs_changed)
                 self._crs_listener_connected = True
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
         # Ctrl+G shortcut (only create once)
         if self.shortcut is None:
@@ -210,7 +215,7 @@ class Tool(BaseTool):
             self.iface.messageBar().pushMessage(
                 "Go-To Tool",
                 f"Navegado a {lat:.6f}, {lon:.6f}",
-                level=Qgis.Success, duration=3
+                level=Qgis.MessageLevel.Success, duration=3
             )
         except Exception as e:
             log_error(f"Error navegando: {e}")
@@ -260,7 +265,7 @@ class Tool(BaseTool):
             self.iface.messageBar().pushMessage(
                 "Go-To Tool",
                 f"{len(coords_list)} markers creados desde texto pegado.",
-                level=Qgis.Success, duration=4
+                level=Qgis.MessageLevel.Success, duration=4
             )
         except Exception as e:
             log_error(f"Error creando markers múltiples: {e}")
@@ -278,7 +283,7 @@ class Tool(BaseTool):
             self.iface.messageBar().pushMessage(
                 "Go-To Tool",
                 f"Bookmark '{name}' guardado",
-                level=Qgis.Success, duration=2
+                level=Qgis.MessageLevel.Success, duration=2
             )
 
     def _remove_bookmark(self, index):
@@ -313,7 +318,7 @@ class Tool(BaseTool):
                 self.iface.messageBar().pushMessage(
                     "Go-To Tool",
                     f"Markers convertidos a capa: {layer.name()}",
-                    level=Qgis.Success, duration=4
+                    level=Qgis.MessageLevel.Success, duration=4
                 )
         except Exception as e:
             log_error(f"Error: {e}")

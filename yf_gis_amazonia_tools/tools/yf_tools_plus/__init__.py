@@ -28,19 +28,29 @@ class Tool(BaseTool):
             from .yf_tools_plus_dialog import YF_Tools_PlusDialog
             self._dialog = YF_Tools_PlusDialog(self.iface)
 
-    def run(self, tab_index=None):
-        """Open the YF Tools Plus dialog, optionally at a specific tab."""
+    def run(self, tab_index=None, tab_text=None):
+        """Open the YF Tools Plus dialog, optionally at a specific tab.
+        tab_text selecciona por título (robusto a reordenamientos); tiene
+        prioridad sobre tab_index. Por defecto abre en el Segmentador."""
+        if tab_index is None and tab_text is None:
+            tab_text = "Segmentador"
         log_info("Abriendo YF Tools Plus")
         self._ensure_dialog()
 
-        if tab_index is not None:
+        if tab_text is not None:
+            tw = self._dialog.tabWidget
+            for i in range(tw.count()):
+                if tab_text.lower() in tw.tabText(i).lower():
+                    tw.setCurrentIndex(i)
+                    break
+        elif tab_index is not None:
             self._dialog.tabWidget.setCurrentIndex(tab_index)
 
         self._dialog.show()
 
     def run_segmentador(self):
         """Shortcut to open directly on the Segmentator tab."""
-        self.run(tab_index=2)
+        self.run(tab_text="Segmentador")
 
     def unload(self):
         if self._dialog:

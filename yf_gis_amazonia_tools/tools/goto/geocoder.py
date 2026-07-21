@@ -10,6 +10,7 @@ a la política de uso (https://operations.osmfoundation.org/policies/nominatim/)
 Autor: Yuri Caller - TUCSA / gis-amazonia.pe
 """
 
+import logging
 import json
 from qgis.PyQt.QtCore import QObject, QUrl, QUrlQuery, pyqtSignal, QTimer
 from qgis.PyQt.QtNetwork import (
@@ -58,7 +59,7 @@ class NominatimGeocoder(QObject):
             try:
                 self._current_reply.abort()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
             self._current_reply = None
 
         url = QUrl(NOMINATIM_URL)
@@ -85,7 +86,7 @@ class NominatimGeocoder(QObject):
             return
 
         try:
-            if reply.error() != QNetworkReply.NoError:
+            if reply.error() != QNetworkReply.NetworkError.NoError:
                 self.searchError.emit(f"Error de red: {reply.errorString()}")
                 return
 
@@ -110,7 +111,7 @@ class NominatimGeocoder(QObject):
                         'importance': importance,
                     })
                 except (ValueError, TypeError):
-                    continue
+                    continue  # nosec B112 - entrada malformada: se omite a proposito
 
             self.resultsReady.emit(results)
         except json.JSONDecodeError as e:
@@ -126,5 +127,5 @@ class NominatimGeocoder(QObject):
             try:
                 self._current_reply.abort()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
             self._current_reply = None

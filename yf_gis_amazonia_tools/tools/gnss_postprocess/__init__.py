@@ -43,7 +43,7 @@ class Tool(BaseTool):
                 "GNSS Post-Process v2", self.iface.mainWindow()
             )
             self._dock.setAllowedAreas(
-                Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
+                Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
             )
             self._dock.setMinimumWidth(460)
 
@@ -51,7 +51,7 @@ class Tool(BaseTool):
             self._widget = GNSSMainDialog(self.iface, self._tool_dir)
             self._dock.setWidget(self._widget)
             self.iface.mainWindow().addDockWidget(
-                Qt.RightDockWidgetArea, self._dock
+                Qt.DockWidgetArea.RightDockWidgetArea, self._dock
             )
         else:
             self._dock.setVisible(not self._dock.isVisible())

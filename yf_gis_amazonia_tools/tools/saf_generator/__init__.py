@@ -28,7 +28,7 @@ class Tool(BaseTool):
         from .dialog import GeneradorPlantacionDialog
 
         self._dialog = GeneradorPlantacionDialog(self.iface)
-        self._dialog.exec_()
+        self._dialog.exec()
 
     def unload(self):
         """Clean up."""

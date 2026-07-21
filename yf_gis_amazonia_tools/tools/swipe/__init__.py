@@ -15,8 +15,12 @@ Soporta todos los tipos de capa: raster, vector, WMS/XYZ, mesh.
 Integrado en YF GIS Amazonia Tools v2.0.
 """
 
+try:
+    from qgis.PyQt.QtGui import QAction        # Qt6: QAction vive en QtGui
+except ImportError:
+    from qgis.PyQt.QtWidgets import QAction    # Qt5: QAction vive en QtWidgets
+import logging
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QAction
 
 from ...core.base_tool import BaseTool
 from ...core.logger import log_info, log_error
@@ -69,7 +73,7 @@ class Tool(BaseTool):
         try:
             self.canvas.mapToolSet.disconnect(self._on_map_tool_set)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     # ------------------------------------------------------------------
     # Activation
@@ -89,7 +93,7 @@ class Tool(BaseTool):
 
         if self.panel is None:
             self.panel = SwipePanel(self.iface, self.iface.mainWindow())
-            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.panel)
+            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.panel)
             self._connect_signals()
 
         self.panel.show()
@@ -178,7 +182,7 @@ class Tool(BaseTool):
                 self.iface.messageBar().pushMessage(
                     "Swipe Tool",
                     "Selecciona una capa antes de activar el swipe.",
-                    level=Qgis.Warning, duration=4
+                    level=Qgis.MessageLevel.Warning, duration=4
                 )
                 self.panel.set_active(False)
                 return
@@ -213,7 +217,7 @@ class Tool(BaseTool):
             self.iface.messageBar().pushMessage(
                 "Swipe Tool",
                 "Capa cambiada a la siguiente del proyecto.",
-                level=Qgis.Info, duration=2
+                level=Qgis.MessageLevel.Info, duration=2
             )
 
     def _on_canvas_position_changed(self, proportion):
@@ -239,7 +243,7 @@ class Tool(BaseTool):
             self.iface.messageBar().pushMessage(
                 "Swipe Tool",
                 "Activa el swipe antes de exportar.",
-                level=Qgis.Warning, duration=3
+                level=Qgis.MessageLevel.Warning, duration=3
             )
             return
 
@@ -247,7 +251,7 @@ class Tool(BaseTool):
             self.iface.messageBar().pushMessage(
                 "Swipe Tool",
                 "Selecciona una capa primero.",
-                level=Qgis.Warning, duration=3
+                level=Qgis.MessageLevel.Warning, duration=3
             )
             return
 
@@ -281,7 +285,7 @@ class Tool(BaseTool):
             self.iface.messageBar().pushMessage(
                 "Swipe Tool",
                 f"Exportado: {os.path.basename(file_path)}",
-                level=Qgis.Success, duration=4
+                level=Qgis.MessageLevel.Success, duration=4
             )
         except Exception as e:
             log_error(f"Error al exportar swipe: {e}")
@@ -303,15 +307,15 @@ class Tool(BaseTool):
         dpi = self.canvas.mapSettings().outputDpi()
         crs = self.canvas.mapSettings().destinationCrs()
 
-        final = QImage(size, QImage.Format_ARGB32_Premultiplied)
+        final = QImage(size, QImage.Format.Format_ARGB32_Premultiplied)
         bg_color = self.canvas.canvasColor()
         final.fill(bg_color)
 
         swipe_layer = self.map_tool.swipe_layer
-        base_layers = [l for l in self.canvas.layers() if l != swipe_layer]
+        base_layers = [l for l in self.canvas.layers() if l != swipe_layer]  # noqa: E741
 
         base_painter = QPainter(final)
-        base_painter.setRenderHint(QPainter.Antialiasing, True)
+        base_painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         try:
             if base_layers:
                 ms = QgsMapSettings()
@@ -333,7 +337,7 @@ class Tool(BaseTool):
                 w = size.width()
                 h = size.height()
                 p = QPainter(final)
-                p.setRenderHint(QPainter.Antialiasing, True)
+                p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
                 p.setOpacity(self.map_tool.opacity)
                 if self.map_tool.mode == MODE_SWIPE:
                     if self.map_tool.direction == DIR_HORIZONTAL:
@@ -353,7 +357,7 @@ class Tool(BaseTool):
         from qgis.PyQt.QtGui import QImage, QPainter
         img = self._render_composite_image()
         if file_path.lower().endswith(".jpg"):
-            rgb = QImage(img.size(), QImage.Format_RGB32)
+            rgb = QImage(img.size(), QImage.Format.Format_RGB32)
             rgb.fill(self.canvas.canvasColor())
             p = QPainter(rgb)
             p.drawImage(0, 0, img)
@@ -370,23 +374,23 @@ class Tool(BaseTool):
         from qgis.PyQt.QtPrintSupport import QPrinter
 
         img = self._render_composite_image()
-        printer = QPrinter(QPrinter.HighResolution)
-        printer.setOutputFormat(QPrinter.PdfFormat)
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
         printer.setOutputFileName(file_path)
         try:
             from qgis.PyQt.QtGui import QPageSize
             page_size = QPageSize(
-                img.size(), QPageSize.Point, "swipe", QPageSize.ExactMatch
+                img.size(), QPageSize.Unit.Point, "swipe", QPageSize.SizeMatchPolicy.ExactMatch
             )
             printer.setPageSize(page_size)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
         p = QPainter(printer)
         try:
             target = p.viewport()
             scaled = img.scaled(
-                target.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+                target.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
             )
             x = (target.width() - scaled.width()) // 2
             y = (target.height() - scaled.height()) // 2

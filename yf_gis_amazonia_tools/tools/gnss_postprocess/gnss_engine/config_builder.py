@@ -46,6 +46,23 @@ class ProcessingParams:
     out_dir: str = ''
     out_prefix: str = 'gnss_result'
 
+    # ── Alturas de antena ─────────────────────────
+    ant_height_rover: float = 0.0    # Altura VERTICAL al ARP (jalón = medida directa;
+                                     # si se midió SLANT en trípode, convertir antes:
+                                     # v = sqrt(slant² − R_antena²) + offset_ARP
+    ant_height_base:  float = 0.0    # Altura de antena base (si es base propia)
+
+    # ── Calibración de antena (ANTEX) ─────────────
+    # Archivo .atx (IGS maestro, o fusionado con ANTEX del fabricante,
+    # ej. METX5/Mettatec). Si está presente Y 'antena' coincide con un
+    # nombre normalizado IGS, RTKLIB aplica PCO/PCV reales (como TBC).
+    antex_file: Optional[str] = None
+    antena_base: str = ''            # Tipo de antena de la base (header RINEX)
+    # NOTA: para CORS IGN (MD01/MD04) la altura de antena
+    # está en el RINEX header — RTKLIB la lee automáticamente
+    # si se usa ant2-postype=rinexhead. Para coords manuales
+    # se debe ingresar ant2-antdelu aquí.
+
     # ── Metadata del proyecto ─────────────────────
     project_name: str = ''
     operator: str = ''
@@ -70,6 +87,8 @@ class ConfigBuilder:
         'kinematic':     2,
         'movbase':       4,
         'fixed':         5,
+        'dgps-static':   1,   # DGPS código diferencial (submétrico, sin falsos fix)
+        'dgps-kinematic': 1,  # DGPS cinemático
         'ppp-static':    7,
         'ppp-kinematic': 6,
     }
@@ -88,9 +107,10 @@ class ConfigBuilder:
             self._header_comment(params),
             self._pos1_section(params),
             self._pos2_section(params),
-            self._out_section(),
+            self._out_section(params),
             self._stats_section(),
             self._ant_section(params),
+            self._files_section(params),
             self._misc_section(),
         ]
         return '\n'.join(sections)
@@ -124,14 +144,36 @@ class ConfigBuilder:
         posmode = self._POSMODE.get(p.solution_type, 0)
         soltype = self._SOLTYPE.get(p.kalman_filter, 0)
 
-        # Modelo ionosférico: IONEX si hay archivo, broadcast si no
-        ionoopt = 8 if p.ionex_file else 1   # 8=IONEX, 1=broadcast
+        # NOTA (verificado con datos reales de MDD bajo dosel): forzar
+        # 'combined' empeora datos con cycle slips severos (el backward
+        # propaga sus propios errores). Se respeta la elección del usuario;
+        # default forward, que demostró ser el más robusto en estos datos.
 
-        # Efemérides: SP3 si hay archivo
-        sateph  = 1 if p.sp3_file else 0     # 1=precise, 0=broadcast
+        # Modelo ionosférico: IONEX si hay archivo VÁLIDO, broadcast si no
+        _ionex_ok = bool(p.ionex_file and os.path.isfile(p.ionex_file))
+        ionoopt = 8 if _ionex_ok else 1   # 8=IONEX, 1=broadcast
+
+        # Efemérides: SP3 solo si el archivo EXISTE (si se pide precise
+        # sin pasar el archivo, RTKLIB se queda sin órbitas y todo falla)
+        _sp3_ok = bool(p.sp3_file and os.path.isfile(p.sp3_file))
+        sateph  = 1 if _sp3_ok else 0     # 1=precise, 0=broadcast
+
+        # Troposfera: si hay efemérides precisas (línea base larga),
+        # estimar troposfera (tropopt=3) en vez de solo Saastamoinen (=2).
+        # Esto mejora notablemente la resolución de ambigüedades >20km.
+        tropopt = 3 if _sp3_ok else 2     # 3=estimate ZTD, 2=Saastamoinen
 
         # Navsys: suma de bits (GPS=0x01, SBAS=0x02, GLO=0x04, GAL=0x08, BDS=0x20)
         navsys = p.navsys
+
+        # Calibración de antena (ANTEX):
+        #   posopt1 = PCV de antena de SATÉLITE → solo tiene sentido con
+        #             efemérides precisas (SP3); en broadcast se ignora.
+        #   posopt2 = PCV de antena de RECEPTOR → requiere .atx cargado
+        #             y que ant1-anttype coincida con un nombre IGS.
+        _atx_ok = bool(p.antex_file and os.path.isfile(p.antex_file))
+        posopt1 = 1 if (_atx_ok and _sp3_ok) else 0
+        posopt2 = 1 if (_atx_ok and p.antena.strip()) else 0
 
         lines = [
             '',
@@ -145,10 +187,10 @@ class ConfigBuilder:
             f'pos1-dynamics      =0',
             f'pos1-tidecorr      =0',
             f'pos1-ionoopt       ={ionoopt}',
-            f'pos1-tropopt       =2',    # Saastamoinen (estándar catastral)
+            f'pos1-tropopt       ={tropopt}',
             f'pos1-sateph        ={sateph}',
-            f'pos1-posopt1       =0',
-            f'pos1-posopt2       =0',
+            f'pos1-posopt1       ={posopt1}',
+            f'pos1-posopt2       ={posopt2}',
             f'pos1-posopt3       =0',
             f'pos1-posopt4       =0',
             f'pos1-posopt5       =0',
@@ -159,9 +201,13 @@ class ConfigBuilder:
         return '\n'.join(lines)
 
     def _pos2_section(self, p: ProcessingParams) -> str:
-        # Modo AR diferente para PPP (no aplica fix de ambigüedad)
-        armode  = 0 if 'ppp' in p.solution_type else 3   # 3=fix-and-hold
-        gloar   = 0 if 'ppp' in p.solution_type else 1
+        # Sin resolución de ambigüedad en PPP ni DGPS:
+        # DGPS usa pseudodistancia (código), no fase → no hay ambigüedad
+        # que fijar → IMPOSIBLE generar falsos fix. Precisión honesta
+        # submétrica (0.3-1 m típico contra base cercana).
+        _sin_ar = ('ppp' in p.solution_type) or ('dgps' in p.solution_type)
+        armode  = 0 if _sin_ar else 3   # 3=fix-and-hold
+        gloar   = 0 if _sin_ar else 1
 
         lines = [
             '',
@@ -186,7 +232,12 @@ class ConfigBuilder:
         ]
         return '\n'.join(lines)
 
-    def _out_section(self) -> str:
+    def _out_section(self, p: ProcessingParams = None) -> str:
+        # NOTA (verificado con datos reales MDD): solstatic=single puede
+        # producir UN falso fix con sigmas centimétricas engañosas y sin
+        # posibilidad de validar consistencia. Se mantiene 'all' SIEMPRE:
+        # el layer_builder valida la dispersión entre épocas (anti-falso-fix).
+        solstatic = 'all'
         lines = [
             '',
             '# ── Formato de salida ───────────────────────────',
@@ -203,7 +254,7 @@ class ConfigBuilder:
             'out-maxsolstd      =0.0',
             'out-height         =ellipsoidal',
             'out-geoid          =internal',
-            'out-solstatic      =all',
+            f'out-solstatic      ={solstatic}',
             'out-nmeaintv1      =0.0',
             'out-nmeaintv2      =0.0',
             'out-outstat        =1',         # Generar archivo de estadísticas
@@ -239,15 +290,18 @@ class ConfigBuilder:
         ]
 
         # ROVER (ant1) — posición calculada por RTKLIB
+        # ant1-antdelu = altura vertical de antena sobre el punto
+        # antdelu espera altura VERTICAL al ARP (no slant). En jalón la medida
+        # de campo ya es vertical; en trípode con cinta (slant) hay que convertir.
         lines += [
             'ant1-postype       =llh',
             'ant1-pos1          =0.0',
             'ant1-pos2          =0.0',
             'ant1-pos3          =0.0',
-            'ant1-anttype       =',
+            f'ant1-anttype       ={p.antena}',
             'ant1-antdele       =0.0',
             'ant1-antdeln       =0.0',
-            'ant1-antdelu       =0.0',
+            f'ant1-antdelu       ={p.ant_height_rover:.4f}',
         ]
 
         # BASE (ant2) — CRÍTICO: usar coords IGN si están disponibles
@@ -261,7 +315,7 @@ class ConfigBuilder:
                 f'ant2-pos1          ={bc.lat_dd:.10f}',
                 f'ant2-pos2          ={bc.lon_dd:.10f}',
                 f'ant2-pos3          ={bc.h_elip:.4f}',
-                'ant2-anttype       =',
+                f'ant2-anttype       ={p.antena_base}',
                 'ant2-antdele       =0.0',
                 'ant2-antdeln       =0.0',
                 'ant2-antdelu       =0.0',
@@ -284,6 +338,26 @@ class ConfigBuilder:
                 'ant2-antdelu       =0.0',
             ]
 
+        return '\n'.join(lines)
+
+    def _files_section(self, p: ProcessingParams) -> str:
+        """
+        Archivos de calibración de antena (ANTEX).
+        RTKLIB usa el MISMO .atx para PCV de receptor y de satélite:
+          file-rcvantfile → corrige la antena del rover (y base si
+                            ant2-anttype está definido)
+          file-satantfile → corrige antenas de los satélites (útil con SP3)
+        Referencia: RTKLIB manual 2.4.2 §3.5.
+        """
+        if not (p.antex_file and os.path.isfile(p.antex_file)):
+            return '\n# ── Archivos ANTEX: no configurados ─────────────'
+        lines = [
+            '',
+            '# ── Calibración de antena (ANTEX) ───────────────',
+            f'# Modelo aplicado: {p.antena or "(sin nombre — PCV rover inactivo)"}',
+            f'file-rcvantfile    ={p.antex_file}',
+            f'file-satantfile    ={p.antex_file}',
+        ]
         return '\n'.join(lines)
 
     def _misc_section(self) -> str:

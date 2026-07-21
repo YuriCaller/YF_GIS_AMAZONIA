@@ -14,10 +14,20 @@ from qgis.PyQt.QtCore import Qt
 
 
 def _resolve_enum(parent, scoped_name, fallback_name):
-    """Try scoped enum first (PyQt6), fall back to unscoped (PyQt5)."""
-    val = getattr(parent, scoped_name, None)
-    if val is not None:
-        return val
+    """Try scoped enum first (PyQt6), fall back to unscoped (PyQt5).
+
+    NOTE: scoped_name contains a dot ("AlignmentFlag.AlignCenter"), and
+    getattr() does NOT resolve dotted paths — it must be walked segment
+    by segment. (A plain getattr(parent, "A.B") always fails, which made
+    every lookup silently fall back to the unscoped name and crash on
+    PyQt6, where unscoped names no longer exist.)"""
+    obj = parent
+    for part in scoped_name.split("."):
+        obj = getattr(obj, part, None)
+        if obj is None:
+            break
+    if obj is not None:
+        return obj
     return getattr(parent, fallback_name)
 
 

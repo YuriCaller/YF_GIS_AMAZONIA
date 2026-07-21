@@ -12,8 +12,13 @@ Each tool is a self-contained module under tools/ that registers itself
 via the ToolRegistry.
 """
 
+import logging
 import os
-from qgis.PyQt.QtWidgets import QAction, QMenu
+try:
+    from qgis.PyQt.QtGui import QAction        # Qt6: QAction vive en QtGui
+except ImportError:
+    from qgis.PyQt.QtWidgets import QAction    # Qt5: QAction vive en QtWidgets
+from qgis.PyQt.QtWidgets import QMenu
 from qgis.PyQt.QtGui import QIcon
 
 from .tool_registry import ToolRegistry
@@ -41,6 +46,16 @@ class YFGISAmazonia:
     # ------------------------------------------------------------------
 
     def initGui(self):
+        # Integración con compositor de mapas
+        try:
+            from ..tools.layout_designer_integration import LayoutDesignerIntegration
+            self._layout_integration = LayoutDesignerIntegration(
+                self.iface, self.plugin_dir
+            )
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            self._layout_integration = None
+
         """Build the top-level menu, toolbar, and register every tool."""
         log_info(f"Iniciando YF GIS Amazonia Tools v{__version__}")
 
@@ -82,6 +97,12 @@ class YFGISAmazonia:
         self.actions.append(about_action)
 
     def unload(self):
+        if hasattr(self, '_layout_integration') and self._layout_integration:
+            try:
+                self._layout_integration.unload()
+            except Exception:
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
+
         """Clean up: unload all tools, remove menu and toolbar."""
         log_info("Descargando YF GIS Amazonia Tools")
 
@@ -121,11 +142,21 @@ class YFGISAmazonia:
         )
 
         self.registry.register(
-            menu=catastral_menu, toolbar=None,
+            menu=catastral_menu, toolbar=self.toolbar,
             tool_id="segmentador",
             label="Segmentador de Parcelas",
             icon="segmentador.png",
             module_path="tools.segmentador",
+            add_to_toolbar=True,
+        )
+
+        self.registry.register(
+            menu=catastral_menu, toolbar=self.toolbar,
+            tool_id="vector_geometry",
+            label="Calcular Geometría Vectorial",
+            icon="vector_geometry.png",
+            module_path="tools.vector_geometry",
+            add_to_toolbar=True,
         )
 
         self.registry.register(
@@ -134,6 +165,24 @@ class YFGISAmazonia:
             label="YF Tools Plus",
             icon="yf_tools.png",
             module_path="tools.yf_tools_plus",
+        )
+
+        self.registry.register(
+            menu=catastral_menu, toolbar=self.toolbar,
+            tool_id="polygon_divider",
+            label="Polygon Divider — Dividir Polígono",
+            icon="polygon_divider.png",
+            module_path="tools.polygon_divider",
+            add_to_toolbar=True,
+        )
+
+        self.registry.register(
+            menu=catastral_menu, toolbar=self.toolbar,
+            tool_id="smart_georeferencer",
+            label="Smart Georeferencer — Georreferenciar en vivo",
+            icon="smart_georeferencer.png",
+            module_path="tools.smart_georeferencer",
+            add_to_toolbar=True,
         )
 
         # ── Geodesia / GNSS ───────────────────────────────────────
@@ -178,6 +227,56 @@ class YFGISAmazonia:
             add_to_toolbar=True,
         )
 
+        # ── Batch Export ──────────────────────────────────────────
+        self.registry.register(
+            menu=catastral_menu, toolbar=self.toolbar,
+            tool_id="batch_export",
+            label="Exportar Expediente",
+            icon="batch_export.png",
+            module_path="tools.batch_export",
+            add_to_toolbar=True,
+        )
+
+        # ── Layout Tools ──────────────────────────────────────────
+        layout_menu = self.menu.addMenu(
+            self._icon("layout_tools.png"), "Layout / Compositor"
+        )
+
+        self.registry.register(
+            menu=catastral_menu, toolbar=self.toolbar,
+            tool_id="smart_labels",
+            label="Smart Labels — Etiquetar capa",
+            icon="smart_labels.png",
+            module_path="tools.smart_labels",
+            add_to_toolbar=True,
+        )
+
+        self.registry.register(
+            menu=layout_menu, toolbar=self.toolbar,
+            tool_id="layout_tools",
+            label="Table Style Manager",
+            icon="layout_tools.png",
+            module_path="tools.layout_tools",
+            add_to_toolbar=False,
+        )
+
+        self.registry.register(
+            menu=layout_menu, toolbar=self.toolbar,
+            tool_id="title_block",
+            label="Generar Cajetín",
+            icon="title_block.png",
+            module_path="tools.layout_tools.title_block_tool",
+            add_to_toolbar=False,
+        )
+
+        self.registry.register(
+            menu=layout_menu, toolbar=self.toolbar,
+            tool_id="layout_rescaler",
+            label="Redimensionar Layout",
+            icon="layout_rescaler.png",
+            module_path="tools.layout_rescaler",
+            add_to_toolbar=False,
+        )
         # ── Comparación Visual (NEW v2.0) ─────────────────────────
         compare_menu = self.menu.addMenu(
             self._icon("swipe.png"), "Comparación Visual"
@@ -221,4 +320,4 @@ class YFGISAmazonia:
         """Show the enhanced About dialog with TUCSA branding."""
         from .about_dialog import AboutDialog
         dlg = AboutDialog(self.iface.mainWindow(), __version__, self.plugin_dir)
-        dlg.exec_()
+        dlg.exec()

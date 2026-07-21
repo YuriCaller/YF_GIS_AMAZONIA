@@ -50,7 +50,7 @@ class ExcelToCsv:
         try:
             # Verificar que el archivo Excel existe
             if not os.path.exists(excel_path):
-                QgsMessageLog.logMessage(f"El archivo Excel no existe: {excel_path}", "YF Tools Plus", Qgis.Critical)
+                QgsMessageLog.logMessage(f"El archivo Excel no existe: {excel_path}", "YF Tools Plus", Qgis.MessageLevel.Critical)
                 return False
             
             # Leer el archivo de Excel
@@ -61,11 +61,11 @@ class ExcelToCsv:
             
             # Verificar que el archivo CSV se creó correctamente
             if not os.path.exists(csv_path):
-                QgsMessageLog.logMessage(f"No se pudo crear el archivo CSV: {csv_path}", "YF Tools Plus", Qgis.Critical)
+                QgsMessageLog.logMessage(f"No se pudo crear el archivo CSV: {csv_path}", "YF Tools Plus", Qgis.MessageLevel.Critical)
                 return False
                 
             return True
             
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error al convertir Excel a CSV: {str(e)}", "YF Tools Plus", Qgis.Critical)
+            QgsMessageLog.logMessage(f"Error al convertir Excel a CSV: {str(e)}", "YF Tools Plus", Qgis.MessageLevel.Critical)
             return False

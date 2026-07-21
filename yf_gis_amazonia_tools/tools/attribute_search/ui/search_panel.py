@@ -65,7 +65,7 @@ class SearchPanel(QWidget):
         self.main_layout.setContentsMargins(6, 6, 6, 6)
         
         # Splitter for layer selection and search options
-        self.main_splitter = QSplitter(Qt.Horizontal)
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # === LEFT SIDE: LAYER SELECTION ===
         self.layer_widget = QWidget()
@@ -74,7 +74,7 @@ class SearchPanel(QWidget):
         
         # Layer selection header
         self.layer_header = QLabel("Selección de Capas")
-        self.layer_header.setFont(QFont("Arial", 10, QFont.Bold))
+        self.layer_header.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         self.layer_layout.addWidget(self.layer_header)
         
         # Layer filter
@@ -91,7 +91,7 @@ class SearchPanel(QWidget):
         # Layer tree
         self.layer_tree = QTreeWidget()
         self.layer_tree.setHeaderLabels(["Capas"])
-        self.layer_tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.layer_tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.layer_tree.setAlternatingRowColors(True)
         self.layer_layout.addWidget(self.layer_tree)
         
@@ -116,7 +116,7 @@ class SearchPanel(QWidget):
         
         # Search options header
         self.search_header = QLabel("Opciones de Búsqueda")
-        self.search_header.setFont(QFont("Arial", 10, QFont.Bold))
+        self.search_header.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         self.search_layout.addWidget(self.search_header)
         
         # Search type group
@@ -261,7 +261,7 @@ class SearchPanel(QWidget):
         for layer in vector_layers:
             item = QTreeWidgetItem(self.layer_tree)
             item.setText(0, layer.name())
-            item.setData(0, Qt.UserRole, layer.id())
+            item.setData(0, Qt.ItemDataRole.UserRole, layer.id())
             
             # Set icon based on geometry type
             if layer.geometryType() == 0:  # Point
@@ -319,7 +319,7 @@ class SearchPanel(QWidget):
             return
         
         # Get fields from first selected layer
-        layer_id = selected_items[0].data(0, Qt.UserRole)
+        layer_id = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
         layer = QgsProject.instance().mapLayer(layer_id)
         
         if layer and isinstance(layer, QgsVectorLayer):
@@ -337,7 +337,7 @@ class SearchPanel(QWidget):
             return
         
         # Set layer for expression widget
-        layer_id = selected_items[0].data(0, Qt.UserRole)
+        layer_id = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
         layer = QgsProject.instance().mapLayer(layer_id)
         
         if layer and isinstance(layer, QgsVectorLayer):
@@ -358,7 +358,7 @@ class SearchPanel(QWidget):
         # Get selected layers
         selected_layers = []
         for item in selected_items:
-            layer_id = item.data(0, Qt.UserRole)
+            layer_id = item.data(0, Qt.ItemDataRole.UserRole)
             layer = QgsProject.instance().mapLayer(layer_id)
             if layer and isinstance(layer, QgsVectorLayer):
                 selected_layers.append(layer)
@@ -455,7 +455,7 @@ class SearchPanel(QWidget):
         safe_text = search_text.replace("'", "''")
         
         # Show progress
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         
         try:
             for layer in layers:
@@ -543,7 +543,7 @@ class SearchPanel(QWidget):
         safe_text = search_text.replace("'", "''")
         
         # Show progress
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         
         try:
             for layer in layers:
@@ -597,7 +597,7 @@ class SearchPanel(QWidget):
         results = []
         
         # Show progress
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         
         try:
             for layer in layers:

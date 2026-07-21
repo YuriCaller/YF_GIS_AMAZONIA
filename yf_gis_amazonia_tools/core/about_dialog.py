@@ -10,6 +10,7 @@ Shows:
 - List of included tools with versions
 """
 
+import logging
 import os
 import webbrowser
 
@@ -43,7 +44,7 @@ class AboutDialog(QDialog):
         # ScrollArea wrapper
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         outer_layout.addWidget(scroll, 1)
 
         container = QWidget()
@@ -60,10 +61,10 @@ class AboutDialog(QDialog):
             if not pixmap.isNull():
                 # Scale to reasonable size, smooth
                 scaled = pixmap.scaled(
-                    96, 96, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    96, 96, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
                 )
                 logo_label.setPixmap(scaled)
-                logo_label.setAlignment(Qt.AlignCenter)
+                logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 layout.addWidget(logo_label)
 
         title = QLabel("YF GIS Amazonia Tools")
@@ -71,18 +72,18 @@ class AboutDialog(QDialog):
         title_font.setPointSize(16)
         title_font.setBold(True)
         title.setFont(title_font)
-        title.setAlignment(Qt.AlignCenter)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
         version_label = QLabel(f"<b>Versión {self.version}</b>")
-        version_label.setAlignment(Qt.AlignCenter)
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         version_label.setStyleSheet("color: #2980b9;")
         layout.addWidget(version_label)
 
         subtitle = QLabel(
             "<i>Suite profesional de herramientas GIS para la Amazonía peruana</i>"
         )
-        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setStyleSheet("color: #555;")
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
@@ -219,8 +220,8 @@ class AboutDialog(QDialog):
 
     def _divider(self):
         line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
         line.setStyleSheet("color: #ddd;")
         return line
 
@@ -247,4 +248,4 @@ class AboutDialog(QDialog):
             try:
                 webbrowser.open(url)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)

@@ -15,6 +15,7 @@ Features:
 Autor: Yuri Caller - TUCSA / gis-amazonia.pe
 """
 
+import logging
 from qgis.PyQt.QtCore import (
     Qt, QPoint, QPointF, QRect, QRectF, QSize, pyqtSignal, QTimer
 )
@@ -130,11 +131,11 @@ class SwipeCanvasItem(QgsMapCanvasItem):
         ms.setDestinationCrs(self.canvas.mapSettings().destinationCrs())
         ms.setOutputDpi(self.canvas.mapSettings().outputDpi())
 
-        image = QImage(canvas_size, QImage.Format_ARGB32_Premultiplied)
-        image.fill(Qt.transparent)
+        image = QImage(canvas_size, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
 
         painter = QPainter(image)
-        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         try:
             job = QgsMapRendererCustomPainterJob(ms, painter)
@@ -273,7 +274,7 @@ class SwipeDivider(QgsMapCanvasItem):
                          handle_long, handle_short)
 
     def paint(self, painter, option=None, widget=None):
-        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         if self.mode == MODE_SWIPE:
             self._paint_divider(painter)
@@ -286,7 +287,7 @@ class SwipeDivider(QgsMapCanvasItem):
 
         # Sombra
         pen_shadow = QPen(QColor(0, 0, 0, 180), 4)
-        pen_shadow.setCapStyle(Qt.FlatCap)
+        pen_shadow.setCapStyle(Qt.PenCapStyle.FlatCap)
         painter.setPen(pen_shadow)
         painter.drawLine(x1, y1, x2, y2)
 
@@ -297,14 +298,14 @@ class SwipeDivider(QgsMapCanvasItem):
         elif self.is_hovered:
             line_color = QColor(200, 230, 255, 255)
         pen_main = QPen(line_color, 2)
-        pen_main.setCapStyle(Qt.FlatCap)
+        pen_main.setCapStyle(Qt.PenCapStyle.FlatCap)
         painter.setPen(pen_main)
         painter.drawLine(x1, y1, x2, y2)
 
         # Handle
         handle_rect = self.get_handle_rect()
         shadow_rect = handle_rect.adjusted(2, 2, 2, 2)
-        painter.setPen(Qt.NoPen)
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(0, 0, 0, 80))
         painter.drawRoundedRect(shadow_rect, 4, 4)
 
@@ -328,7 +329,7 @@ class SwipeDivider(QgsMapCanvasItem):
         # Sombra exterior (suave)
         shadow_color = QColor(0, 0, 0, 100)
         painter.setPen(QPen(shadow_color, 6))
-        painter.setBrush(Qt.NoBrush)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(center, radius + 1, radius + 1)
 
         # Borde principal blanco
@@ -339,7 +340,7 @@ class SwipeDivider(QgsMapCanvasItem):
             border_color = QColor(200, 230, 255, 255)
 
         painter.setPen(QPen(border_color, 3))
-        painter.setBrush(Qt.NoBrush)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(center, radius, radius)
 
         # Borde interno oscuro para contraste
@@ -474,22 +475,22 @@ class SwipeMapTool(QgsMapTool):
 
     def _update_cursor(self):
         if self.mode == MODE_MAGNIFIER:
-            self.canvas.setCursor(QCursor(Qt.BlankCursor))
+            self.canvas.setCursor(QCursor(Qt.CursorShape.BlankCursor))
             return
 
         if self.is_dragging or self.is_hovering_divider:
             if self.direction == DIR_HORIZONTAL:
-                self.canvas.setCursor(QCursor(Qt.SplitHCursor))
+                self.canvas.setCursor(QCursor(Qt.CursorShape.SplitHCursor))
             else:
-                self.canvas.setCursor(QCursor(Qt.SplitVCursor))
+                self.canvas.setCursor(QCursor(Qt.CursorShape.SplitVCursor))
         else:
             self.canvas.setCursor(self._build_swipe_cursor())
 
     def _build_swipe_cursor(self):
         pix = QPixmap(32, 32)
-        pix.fill(Qt.transparent)
+        pix.fill(Qt.GlobalColor.transparent)
         p = QPainter(pix)
-        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         p.setPen(QPen(QColor(0, 0, 0), 2))
         p.setBrush(QBrush(QColor(255, 255, 255)))
 
@@ -543,20 +544,20 @@ class SwipeMapTool(QgsMapTool):
             try:
                 self.canvas.scene().removeItem(self.swipe_item)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
             self.swipe_item = None
         if self.divider_item:
             try:
                 self.canvas.scene().removeItem(self.divider_item)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
             self.divider_item = None
         self.canvas.unsetCursor()
         self.canvas.refresh()
         super().deactivate()
 
     def canvasPressEvent(self, event):
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
 
         if self.mode == MODE_MAGNIFIER:
@@ -597,7 +598,7 @@ class SwipeMapTool(QgsMapTool):
                 self._update_cursor()
 
     def canvasReleaseEvent(self, event):
-        if event.button() != Qt.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
             return
         if self.is_dragging:
             self.is_dragging = False
@@ -611,43 +612,43 @@ class SwipeMapTool(QgsMapTool):
         modifiers = event.modifiers()
 
         # Ctrl+S: exportar
-        if key == Qt.Key_S and modifiers & Qt.ControlModifier:
+        if key == Qt.Key.Key_S and modifiers & Qt.KeyboardModifier.ControlModifier:
             self.exportRequested.emit()
             event.accept()
             return
 
         if self.mode == MODE_SWIPE:
-            step = 0.05 if modifiers & Qt.ShiftModifier else 0.01
+            step = 0.05 if modifiers & Qt.KeyboardModifier.ShiftModifier else 0.01
 
             if self.direction == DIR_HORIZONTAL:
-                if key == Qt.Key_Left:
+                if key == Qt.Key.Key_Left:
                     self._set_position(self.swipe_position - step)
                     event.accept()
                     return
-                elif key == Qt.Key_Right:
+                elif key == Qt.Key.Key_Right:
                     self._set_position(self.swipe_position + step)
                     event.accept()
                     return
             else:
-                if key == Qt.Key_Up:
+                if key == Qt.Key.Key_Up:
                     self._set_position(self.swipe_position - step)
                     event.accept()
                     return
-                elif key == Qt.Key_Down:
+                elif key == Qt.Key.Key_Down:
                     self._set_position(self.swipe_position + step)
                     event.accept()
                     return
 
         elif self.mode == MODE_MAGNIFIER:
             # +/- ajustan el radio de la lupa
-            if key in (Qt.Key_Plus, Qt.Key_Equal):
+            if key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
                 new_radius = self.magnifier_radius + 20
                 self.set_magnifier_radius(new_radius)
                 self.radiusChanged.emit(self.magnifier_radius)
                 self.canvas.refresh()
                 event.accept()
                 return
-            elif key == Qt.Key_Minus:
+            elif key == Qt.Key.Key_Minus:
                 new_radius = self.magnifier_radius - 20
                 self.set_magnifier_radius(new_radius)
                 self.radiusChanged.emit(self.magnifier_radius)

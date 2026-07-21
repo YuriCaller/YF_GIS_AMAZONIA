@@ -11,10 +11,13 @@
  ***************************************************************************/
 """
 
+import logging
 import os
+from qgis.PyQt.QtGui import QDesktopServices as __QDS
+from qgis.PyQt.QtCore import QUrl as __QURL
 import sys
 import subprocess
-from qgis.core import QgsVectorLayer, QgsVectorFileWriter, QgsMessageLog, Qgis
+from qgis.core import QgsVectorLayer, QgsVectorFileWriter, QgsMessageLog, Qgis, QgsProject
 from qgis.PyQt.QtWidgets import QMessageBox
 
 
@@ -60,20 +63,25 @@ class ExcelExporter:
         options.onlySelected = False  # Exportar todos los elementos
         options.attributes = list(range(len(layer.fields())))  # Exportar todos los campos
         
-        # Exportar usando QgsVectorFileWriter
-        error = QgsVectorFileWriter.writeAsVectorFormat(
+        # Exportar usando QgsVectorFileWriter (API no deprecada, compatible con PyQt5 y PyQt6)
+        error = QgsVectorFileWriter.writeAsVectorFormatV3(
             layer,
             output_file,
+            QgsProject.instance().transformContext(),
             options
         )
-        
-        if error[0] != QgsVectorFileWriter.NoError:
-            raise Exception(f"Error al exportar a XLSX: {error[1]}")
+
+        # writeAsVectorFormatV3 retorna una tupla (WriterError, errorMessage, ...)
+        error_code = error[0] if isinstance(error, tuple) else error
+        error_message = error[1] if isinstance(error, tuple) and len(error) > 1 else ""
+
+        if error_code != QgsVectorFileWriter.WriterError.NoError:
+            raise Exception(f"Error al exportar a XLSX: {error_message}")
         
         QgsMessageLog.logMessage(
             f"Exportación exitosa a: {output_file}", 
             "YF Tools Plus", 
-            Qgis.Success
+            Qgis.MessageLevel.Success
         )
         
         # Abrir archivo si se solicita
@@ -101,33 +109,34 @@ class ExcelExporter:
             QgsMessageLog.logMessage(
                 f"Error en exportación rápida: {str(e)}", 
                 "YF Tools Plus", 
-                Qgis.Critical
+                Qgis.MessageLevel.Critical
             )
             raise
     
     def open_file_in_os(self, file_path):
-        """
-        Abre el archivo especificado usando la aplicación predeterminada del sistema operativo.
-        
-        :param file_path: Ruta del archivo a abrir
-        :type file_path: str
-        """
+        """Abre el archivo con la app predeterminada. En Windows usa
+        os.startfile (el más fiable para lanzar Excel); si falla, cae a
+        QDesktopServices y luego a subprocess."""
+        import os as _os, sys as _sys, subprocess as _sp
+        abspath = _os.path.abspath(file_path)
+        # 1) Windows: os.startfile
+        if _os.name == 'nt':
+            try:
+                _os.startfile(abspath)  # nosec B606 - apertura de archivo propio exportado por el usuario
+                return True
+            except Exception:
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
+        # 2) QDesktopServices (multiplataforma)
         try:
-            if os.name == 'nt':  # Windows
-                os.startfile(file_path)
-            elif sys.platform == 'darwin':  # macOS
-                subprocess.call(('open', file_path))
-            else:  # Linux/other Unix-like
-                subprocess.call(('xdg-open', file_path))
-                
-            QgsMessageLog.logMessage(
-                f"Archivo abierto: {file_path}", 
-                "YF Tools Plus", 
-                Qgis.Info
-            )
-        except Exception as e:
-            QgsMessageLog.logMessage(
-                f"No se pudo abrir el archivo automáticamente: {str(e)}", 
-                "YF Tools Plus", 
-                Qgis.Warning
-            )
+            from qgis.PyQt.QtGui import QDesktopServices
+            from qgis.PyQt.QtCore import QUrl
+            if QDesktopServices.openUrl(QUrl.fromLocalFile(abspath)):
+                return True
+        except Exception:
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
+        # 3) subprocess por plataforma
+        QgsMessageLog.logMessage(
+            "No se pudo abrir automaticamente: {}".format(abspath),
+            "YF Tools Plus", Qgis.MessageLevel.Warning)
+        return False
+
