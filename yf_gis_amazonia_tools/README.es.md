@@ -21,6 +21,20 @@ Aunque nació para la Amazonía peruana, hoy se usa en más de 20 países.
 
 ---
 
+## Novedades v3.0.5
+
+- **Analizador de Superposición — geoservicios oficiales (NUEVO):** evalúa un predio frente a derechos preexistentes y áreas protegidas, informando área superpuesta en hectáreas, porcentaje del predio y nivel de severidad. Las fuentes pueden ser archivos vectoriales locales, geoservicios oficiales, o ambas cosas combinadas en una sola corrida.
+- **Catálogo de geoservicios editable:** un JSON en la carpeta de configuración del perfil, precargado y verificado en campo para el Perú — SERFOR (concesiones forestales, permisos, cesiones en uso, BPP, zonificación forestal, ecosistemas frágiles), SERNANP (ANP, **zonas de amortiguamiento**, zonas reservadas, ACR, ACP) y MIDAGRI (catastro rural, comunidades nativas y campesinas). Quien trabaje en otro país añade sus propios servicios sin tocar código.
+- **WFS y ArcGIS REST**, elegido por servicio. La descarga se acota al bounding box del predio, de modo que nunca se baja una capa nacional completa. Qué transporte soporta realmente cada servicio se comprobó contra los servidores en vivo, no se dedujo de la documentación.
+- **Trazabilidad honesta:** un archivo local se acredita con SHA-256; un geoservicio solo puede acreditarse como *instantánea* (URL, capa, hora, conteo). El informe declara esa diferencia en lugar de presentar ambas como garantías equivalentes.
+- **Una capa que no carga se reporta como NO EVALUADA**, nunca como libre de superposición — distinción que importa cuando el informe va a un expediente administrativo o registral. La advertencia legal de cada entidad se traslada al informe.
+
+## Novedades v3.0.0 – v3.0.3
+
+- **Compatibilidad Qt6 / QGIS 4.x completada:** 194 enumeraciones migradas a forma con scope; 104 bloques `try/except/pass` desnudos reemplazados por logging (Bandit B110); Flake8 limpio.
+- **YF Tools Plus:** pestaña unificada *Tabla → Polígono* que lee Excel y CSV directamente, con soporte multi-polígono por campo ID, orden de vértices y validación honesta reportada por número de fila de Excel.
+- **Iconos** migrados a Font-GIS (CC BY 4.0) e iconos nativos de QGIS (GPL).
+
 ## Novedades v2.5.0 – v2.5.1
 
 - **Sistema ANTEX / correcciones PCO-PCV (2.5.0):** el campo de antena ya no es documental. Nuevo gestor ANTEX (descarga IGS20, parseo, archivos custom de fabricante, lectura del header RINEX de la base); las correcciones de centro de fase de receptor/satélite ahora sí se aplican cuando hay ANTEX válido y nombre de antena. Soporte universal de antenas (Trimble, CHCNAV, Leica, South, Emlid, Mettatec…).
@@ -92,6 +106,7 @@ Todas las herramientas están **completamente integradas y funcionando** dentro 
 | Herramienta | Descripción |
 |---|---|
 | **Búsqueda Avanzada de Atributos** | Búsqueda multi-capa con expresiones simples o avanzadas (expresiones QGIS). Visualización con gráficos, generación de reportes, exportación a CSV/Excel, zoom y resaltado de entidades encontradas. |
+| **Analizador de Superposición** | Evalúa un predio frente a derechos preexistentes y áreas protegidas. Fuentes: carpeta de capas locales, geoservicios oficiales (WFS / ArcGIS REST), o ambas. Informa superposición en hectáreas, porcentaje del predio y nivel de severidad; genera informe HTML→Word con conclusión editable, trazabilidad SHA-256 para archivos locales e instantánea para servicios. Catálogo precargado para el Perú (SERFOR, SERNANP, MIDAGRI), editable y extensible a otros países. |
 
 ### Layout / Compositor
 

@@ -21,6 +21,20 @@ Although it was born for the Peruvian Amazon, it is now used in more than 20 cou
 
 ---
 
+## What's new in v3.0.5
+
+- **Superposition Analyser — official geoservices (NEW):** evaluates a parcel against pre-existing rights and protected areas, reporting overlap area in hectares, percentage of the parcel and a severity level. Sources may be local vector files, official geoservices, or both combined in a single run.
+- **Editable geoservice catalogue:** a JSON file in the profile config folder, preloaded and field-verified for Peru — SERFOR (forest concessions, permits, cesiones en uso, BPP, forest zoning, fragile ecosystems), SERNANP (protected areas, **buffer zones**, reserved zones, ACR, ACP) and MIDAGRI (rural cadastre, native and peasant communities). Users in other countries add their own services without touching code.
+- **WFS and ArcGIS REST**, chosen per service. Downloads are restricted to the parcel bounding box, so a national layer is never fetched in full. Which transport each service actually supports was verified against the live servers, not assumed from documentation.
+- **Honest traceability:** local files are fingerprinted with SHA-256; a geoservice can only be attested as a *snapshot* (URL, layer, timestamp, feature count). The report states that difference explicitly rather than presenting both as equivalent guarantees.
+- **A layer that fails to load is reported as NOT EVALUATED**, never as free of overlap — a distinction that matters when the report goes into an administrative or registry file. Each institution's legal notice is carried into the report.
+
+## What's new in v3.0.0 – v3.0.3
+
+- **Qt6 / QGIS 4.x compatibility completed:** 194 enumerations migrated to scoped form; 104 bare `try/except/pass` blocks replaced with logging (Bandit B110); Flake8 clean.
+- **YF Tools Plus:** unified *Tabla → Polígono* tab reading Excel and CSV directly, with multi-polygon support via ID field, vertex ordering, and honest validation reporting by Excel row number.
+- **Icons** migrated to Font-GIS (CC BY 4.0) and native QGIS icons (GPL).
+
 ## What's new in v2.5.0 – v2.5.1
 
 - **ANTEX / PCO-PCV correction system (2.5.0):** the antenna field is no longer documentary. New ANTEX manager (IGS20 download, parsing, custom manufacturer files, RINEX base header reading); receiver/satellite phase-center corrections are now actually applied when a valid ANTEX and antenna name are present. Universal antenna support (Trimble, CHCNAV, Leica, South, Emlid, Mettatec…).
@@ -92,6 +106,7 @@ All tools are **fully integrated and working** within a single main menu in QGIS
 | Tool | Description |
 |---|---|
 | **Búsqueda Avanzada de Atributos** | Multi-layer search with simple or advanced (QGIS) expressions. Chart visualization, report generation, CSV/Excel export, zoom and highlighting of matched features. |
+| **Analizador de Superposición** | Evaluates a parcel against pre-existing rights and protected areas. Sources: local vector folder, official geoservices (WFS / ArcGIS REST), or both. Reports overlap in hectares, percentage of the parcel and severity level; generates an HTML→Word report with an editable conclusion, SHA-256 traceability for local files and snapshot traceability for services. Preloaded catalogue for Peru (SERFOR, SERNANP, MIDAGRI), editable and extensible to other countries. |
 
 ### Layout / Compositor
 

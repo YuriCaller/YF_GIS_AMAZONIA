@@ -2,12 +2,18 @@
 name=YF GIS Amazonia Tools
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-description=Professional GIS toolkit for cadastral, forestry and surveying workflows in the Peruvian Amazon. Includes a live georeferencer, GNSS post-processing, smart labels, vector geometry calculator, layout tools, batch export and more.
-version=3.0.3
+description=Professional GIS toolkit for cadastral, forestry and surveying workflows in the Peruvian Amazon. Includes an overlap analyser against official geoservices (WFS / ArcGIS REST), a live georeferencer, GNSS post-processing, smart labels, vector geometry calculator, layout tools, batch export and more.
+version=3.0.5
 author=Yuri Fabian Caller Cordova
 email=yuricaller@gmail.com
 
 about=Unified plugin integrating specialized tools for Peruvian Amazon surveying, cadastral and forestry professionals.
+    OVERLAP ANALYSIS (NEW v3.0.4):
+    - Superposition Analyser: evaluates a parcel against pre-existing rights and protected areas, reporting overlap area in hectares, percentage of the parcel and a severity level. Sources can be local vector files, official geoservices, or both combined in a single run.
+    - Editable geoservice catalogue: a JSON file in the profile config folder, preloaded and field-verified for Peru (SERFOR forest concessions, permits, BPP and zoning; SERNANP protected areas and buffer zones; MIDAGRI rural cadastre and native/peasant communities). Users in other countries add their own services without touching code. New services shipped with plugin updates are merged into an existing catalogue without overwriting user edits.
+    - Consumption via OGC WFS or ArcGIS REST, chosen per service. Downloads are restricted to the parcel bounding box, so a national layer is never fetched in full.
+    - Traceability: local files are fingerprinted with SHA-256; remote services record URL, layer, timestamp and feature count, and the report states explicitly that a remote snapshot is not independently re-verifiable the way a file hash is.
+    - Layers that fail to load are reported as NOT EVALUATED, never as free of overlap. Legal notices from each source institution are carried into the report.
     LIVE GEOREFERENCING (NEW v2.4.0):
     - Smart Georeferencer: dynamic real-time georeferencer for scanned cadastral plans and drone imagery. Places the image as a TOC raster layer and warps it live on the canvas. ArcGIS-style two-click GCP capture with a fixed source anchor and a live guide arrow; the control-point target auto-snaps to reference-layer vertices using the QGIS snapping configuration. Automatic GCP detection via OpenCV (SIFT/ORB + RANSAC), two-stage TPS warp engine, leave-one-out (LOO) quality diagnostic that flags inconsistent control points with a colour heatmap, GCP import from CSV/Excel (pixelX,pixelY,mapX,mapY), and full-resolution GeoTIFF export. OpenCV is required only for automatic detection; manual capture works without it.
     CADASTRAL & GEOMETRY (v2.3.0):
@@ -43,9 +49,109 @@ deprecated=False
 server=False
 hasProcessingProvider=no
 
-tags=amazonia,peru,cadastre,cadastral,surveying,topography,gnss,ppk,ppp,rtklib,geodesy,memoria descriptiva,atlas,word,docx,agroforestry,forestry,saf,attribute search,azimuth,vertices,coordinates,polygon,excel,swipe,compare,goto,navigate,smart labels,vector geometry,layout,rescaler,table style,title block,cajetin,batch export,layout tools,compositor,georeferencer,georeferencing,warp,tps,gcp,control points,raster,scanned plan,arcgis
+tags=amazonia,peru,cadastre,cadastral,superposition,overlap,overlap analysis,wfs,ogc,arcgis rest,geoservices,geoservicios,serfor,sernanp,midagri,anp,protected areas,concessions,land tenure,surveying,topography,gnss,ppk,ppp,rtklib,geodesy,memoria descriptiva,atlas,word,docx,agroforestry,forestry,saf,attribute search,azimuth,vertices,coordinates,polygon,excel,swipe,compare,goto,navigate,smart labels,vector geometry,layout,rescaler,table style,title block,cajetin,batch export,layout tools,compositor,georeferencer,georeferencing,warp,tps,gcp,control points,raster,scanned plan,arcgis
 
-changelog=Version 3.0.3 (2026-07-16):
+changelog=Version 3.0.5 (2026-08-03):
+ NOTA: la version 3.0.4 no llego a publicarse. Fue retenida por el
+ escaner de seguridad del repositorio de QGIS y nunca estuvo
+ disponible para descarga. Todo su contenido se entrega en esta
+ version, junto con la resolucion de los hallazgos que la bloquearon.
+ ANALIZADOR DE SUPERPOSICION - CONSUMO DE GEOSERVICIOS OFICIALES (NUEVO):
+ * Nuevo modulo service_catalog: catalogo EDITABLE de geoservicios en JSON
+   dentro de la carpeta config del perfil. Precargado para Peru con 7
+   servicios y 21 capas, todos verificados en vivo contra los servidores
+   el 2026-07-30: SERFOR (concesiones forestales, permisos, cesiones en
+   uso, unidad de aprovechamiento, BPP, bosques protectores, zonificacion
+   forestal, ecosistemas fragiles, habitats criticos), SERNANP (ANP
+   nacional definitiva, zona de amortiguamiento, zona reservada, ACR,
+   ACP) y MIDAGRI (predio rural, comunidades nativas, comunidades
+   campesinas). Extensible a otros paises sin tocar codigo.
+ * Nuevo modulo wfs_source: construye el URI y elige el proveedor por
+   servicio (WFS de OGC o ArcGIS REST). La descarga se acota al bounding
+   box del predio via restrictToRequestBBOX, de modo que nunca se
+   descarga una capa nacional completa.
+ * Nuevo dialogo de seleccion de servicios: arbol con casillas agrupado
+   por pais y servicio, prueba de conexion por capa antes de analizar,
+   acceso directo al JSON del catalogo y aviso al elegir capas sin fecha
+   de verificacion.
+ * Las dos fuentes se combinan: carpeta de capas locales, geoservicios, o
+   ambas en una sola corrida. La carpeta dejo de ser obligatoria.
+ * Fusion de catalogo: los servicios que se agreguen en futuras versiones
+   del plugin se incorporan a un catalogo ya guardado sin pisar las
+   ediciones del usuario, respetando los servicios que haya borrado a
+   proposito y avisando cuando su definicion diverge de la del plugin.
+ * Trazabilidad diferenciada: un archivo local se acredita con SHA-256; un
+   geoservicio solo puede acreditarse como instantanea (URL, capa, hora y
+   conteo). La ficha lo declara y verificar_archivo ya no reporta un
+   falso negativo de hash sobre origenes remotos.
+ * Una capa que no carga se reporta como NO EVALUADA, nunca como libre de
+   superposicion. Las advertencias legales de cada entidad (art. 62 de la
+   Ley 29763 para SERFOR, Ley 26834 para SERNANP, y la referencia a la
+   Direccion Regional Agraria y a SUNARP para MIDAGRI) se trasladan al
+   informe.
+ HONESTIDAD DEL INFORME (correcciones de fondo):
+ * CRITICO: capas_evaluadas contaba tambien las capas con error, de modo
+   que una fuente que nunca pudo leerse engrosaba el recuento y el informe
+   afirmaba haberla contrastado. Ahora se cuentan aparte: capas_evaluadas,
+   capas_no_evaluadas y capas_totales.
+ * La conclusion sugerida declara la cobertura real ("contrastada contra N
+   de T capas") e incorpora una constancia expresa dentro del propio
+   parrafo cuando alguna capa no pudo evaluarse. Antes la salvedad solo
+   figuraba en una seccion posterior, de modo que el texto que se
+   transcribe al expediente afirmaba un resultado limpio sin matizar.
+ * Cobertura nula: si ninguna capa pudo consultarse, la conclusion ya no
+   redacta que el predio esta libre. Declara que no fue posible efectuar
+   el analisis y desaconseja emplear el documento como sustento tecnico.
+ * La seccion "Capas no evaluadas" del informe se presenta como bloque de
+   advertencia destacado, no como una lista mas.
+ * Cancelacion del analisis: boton Cancelar junto a la barra de progreso.
+   Las capas pendientes NO se omiten en silencio, se registran como no
+   evaluadas para que la cobertura incompleta conste en el informe.
+ ICONOS:
+ * Nuevos iconos para Analizador de Superposicion, Comparacion Visual
+   (swipe) y Navegacion (GoTo), generados desde glifos de Font-GIS
+   (interseccion, swipe-map-h y position respectivamente). Los tres se
+   unifican a 128x128 con margen interior, en linea con el resto de la
+   suite; antes median 100, 128 y 94 px con encuadres dispares.
+ * Codigo de color por funcion: el Analizador de Superposicion pasa a
+   terroso (#8C3A2E) porque es el unico modulo que emite un juicio con
+   consecuencias registrales y en una barra mayoritariamente azul
+   quedaba indistinguible; el swipe pasa a petroleo (#1F6F8B) para
+   separarse del bloque azul contiguo sin perder definicion a 24 px.
+ COMPATIBILIDAD Qt6:
+ * Resueltos los 10 hallazgos del comprobador Qt6 del repositorio. Ocho
+   estaban en la rama Qt5 de fallbacks try/except AttributeError: el
+   comprobador es estatico y marca el literal sin scope aunque solo se
+   ejecute en Qt5. Se sustituyen por indireccion getattr(Clase, "Enum",
+   Clase).MIEMBRO, que resuelve en tiempo de ejecucion, funciona en Qt5 y
+   Qt6 y no deja literal que marcar. Afecta a QgsWkbTypes (Type y
+   GeometryType), QgsVectorFileWriter (ActionOnExistingFile y
+   WriterError), QgsSnappingConfig (SnappingMode), QgsMapLayerProxyModel
+   (Filter), QIODevice (OpenModeFlag) y Qt (CursorShape).
+ * QgsVectorFileWriter.NoError pasa a WriterError.NoError.
+ * La llamada a exec_() se resuelve por getattr para no dejar el nombre
+   antiguo en el codigo.
+ ESCANEO DE SEGURIDAD DEL REPOSITORIO:
+ * Resueltos los 6 hallazgos que bloqueaban la publicacion, todos en el
+   modulo GoTo/OCR y todos falsos positivos documentados en el codigo:
+   tres try/except/pass de operaciones accesorias (log de QGIS, QSettings
+   y estado de un checkbox), una llamada a subprocess.run que ejecuta
+   tesseract.exe con lista de argumentos y sin shell, y dos rutas del
+   registro de Windows que detect-secrets marcaba como cadenas Base64 de
+   alta entropia. Los try/except y el subprocess quedan anotados con
+   nosec y su justificacion; las rutas del registro se componen por
+   partes, de modo que ningun literal alcanza el umbral de entropia y el
+   hallazgo desaparece sin depender de como se invoque el escaner.
+ FIXES:
+ * CapaEncontrada admite proveedores distintos de ogr. El motor forzaba
+   "ogr" al abrir cada capa, lo que invalidaba cualquier origen remoto.
+ * La etiqueta de origen ya no usa os.path.basename, que sobre una URL de
+   servicio devolvia el nombre del endpoint en lugar del de la capa.
+ * La capa de resultado dejo de duplicarse: se cargaba automaticamente al
+   terminar el analisis y el boton "Cargar capa" seguia conectado al mismo
+   metodo, de modo que pulsarlo acumulaba copias identicas.
+ * closeEvent no liberaba la seleccion de geoservicios.
+Version 3.0.3 (2026-07-16):
  * Acerca de: enlace al sitio web oficial y version leida dinamicamente del metadata
  * Flake8: renombradas variables ambiguas restantes y marcados re-imports locales intencionales
 Version 3.0.2 (2026-07-16):

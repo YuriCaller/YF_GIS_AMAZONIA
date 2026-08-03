@@ -242,6 +242,15 @@ class YFGISAmazonia:
             add_to_toolbar=True,
         )
 
+        self.registry.register(
+            menu=search_menu, toolbar=self.toolbar,
+            tool_id="superposition",
+            label="Análisis de Superposición de Derechos",
+            icon="superposition.png",
+            module_path="tools.superposition",
+            add_to_toolbar=True,
+        )
+
         # ── Batch Export ──────────────────────────────────────────
         self.registry.register(
             menu=catastral_menu, toolbar=self.toolbar,

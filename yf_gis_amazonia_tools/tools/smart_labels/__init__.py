@@ -30,6 +30,13 @@ class Tool(BaseTool):
         super().__init__(iface, plugin_dir)
         self._context_action = None
         self._setup_context_menu()
+        # Registrar funciones de expresion elipsoidales al cargar el plugin,
+        # para que proyectos guardados con etiquetas yf_* rendericen bien.
+        try:
+            from .label_engine import registrar_funciones_expresion
+            registrar_funciones_expresion()
+        except Exception as e:
+            log_error(f"Smart Labels: registro de funciones fallido: {e}")
 
     def _setup_context_menu(self):
         """Registra acción en el menú contextual del canvas."""
@@ -185,9 +192,18 @@ class Tool(BaseTool):
             geom_type   = QgsWkbTypes.geometryType(layer.wkbType())
 
             if geom_type == 2:
-                aplicar_etiqueta_poligono(layer, estilo_key, campo_nombre)
+                aplicar_etiqueta_poligono(
+                    layer, estilo_key, campo_nombre,
+                    unidad_area=dlg.get_unidad_area(),
+                    unidad_perim=dlg.get_unidad_longitud(),
+                    metodo=dlg.get_metodo(),
+                )
             elif geom_type == 1:
-                aplicar_etiqueta_linea(layer, estilo_key)
+                aplicar_etiqueta_linea(
+                    layer, estilo_key,
+                    unidad_long=dlg.get_unidad_longitud(),
+                    metodo=dlg.get_metodo(),
+                )
             else:
                 aplicar_etiqueta_punto(layer, estilo_key, campo_nombre)
 

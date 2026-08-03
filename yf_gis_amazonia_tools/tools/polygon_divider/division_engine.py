@@ -47,25 +47,39 @@ class DivisionError(Exception):
 
 def _validar_poligono_simple(geom: QgsGeometry):
     """
-    Verifica que la geometría sea un polígono simple (no multipolígono).
+    Valida y normaliza la geometría a dividir.
 
-    Se rechazan explícitamente los multipolígonos: el algoritmo de
-    bisección sobre geometrías con múltiples partes o islas produce
-    resultados impredecibles. Mejor un alcance acotado y confiable.
+    v3.0.4 — se admiten multipolígonos:
+    - Multi con UNA sola parte (típico de capas cuyo tipo es MultiPolygon,
+      como GeoPackage/QField): se desenvuelve a polígono simple de forma
+      transparente. Era el falso positivo más frecuente de la restricción
+      anterior.
+    - Multi genuino (varias partes): se permite. El barrido por bisección
+      es monótono también con varias partes — _area_a_un_lado clasifica y
+      une los fragmentos por lado — y los resultados no contiguos ya se
+      detectan y reportan aguas abajo (indices_multiparte).
     """
     if geom is None or geom.isEmpty():
         raise DivisionError("La geometría está vacía o es nula.")
 
-    if geom.isMultipart():
-        raise DivisionError(
-            "Esta herramienta solo admite polígonos simples (una sola parte).\n\n"
-            "El polígono seleccionado es un multipolígono. Conviértelo a "
-            "partes simples (Vectorial → Geometría → Multiparte a partes) "
-            "antes de dividirlo."
-        )
-
     if QgsWkbTypes.geometryType(geom.wkbType()) != QgsWkbTypes.GeometryType.PolygonGeometry:
         raise DivisionError("La geometría seleccionada no es un polígono.")
+
+    if geom.isMultipart():
+        partes = [p for p in geom.asGeometryCollection()
+                  if p is not None and not p.isEmpty()]
+        if not partes:
+            raise DivisionError("La geometría está vacía o es nula.")
+        if len(partes) == 1:
+            geom = partes[0]
+            log_info("Polygon Divider: multipolígono de una sola parte — "
+                     "convertido a polígono simple automáticamente.")
+        else:
+            log_warning(
+                "Polygon Divider: multipolígono de {} partes admitido. "
+                "Algunos fragmentos podrían resultar no contiguos; se "
+                "reportarán al aplicar la división.".format(len(partes))
+            )
 
     if not geom.isGeosValid():
         # Intento de reparación automática antes de rendirse
@@ -234,7 +248,16 @@ def _area_a_un_lado(geom: QgsGeometry, centro: QgsPointXY, angulo_rad: float, of
 
     fragmentos, err = _partir_por_linea(geom, linea)
     if fragmentos is None:
-        return None, None
+        if geom.isMultipart():
+            # v3.0.4: en un multipolígono, el offset puede caer en el vacío
+            # ENTRE partes: la línea no corta ninguna, pero el área por lado
+            # sigue bien definida — se clasifican las partes enteras.
+            fragmentos = [p for p in geom.asGeometryCollection()
+                          if p is not None and not p.isEmpty()]
+            if len(fragmentos) < 2:
+                return None, None
+        else:
+            return None, None
 
     geom_lado_a, geom_lado_b = _clasificar_y_unir_fragmentos(
         fragmentos, punto_offset, angulo_rad

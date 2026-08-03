@@ -18,7 +18,8 @@ from qgis.PyQt.QtGui import QFont
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QPlainTextEdit, QListWidget, QListWidgetItem, QComboBox,
-    QSpinBox, QGroupBox, QFormLayout, QDialogButtonBox, QFrame
+    QSpinBox, QGroupBox, QFormLayout, QDialogButtonBox, QFrame,
+    QApplication, QMessageBox
 )
 
 from ...core.paste_helpers import extract_multiple_pairs, guess_coordinate_type
@@ -29,6 +30,25 @@ from ...core.coord_parser import (
 
 
 UTM_BANDS = list('CDEFGHJKLMNPQRSTUVWX')
+
+
+class PasteTextEdit(QPlainTextEdit):
+    """QPlainTextEdit que acepta pegar IMÁGENES (Ctrl+V de una captura de
+    pantalla): en vez de ignorarlas, emite imagePasted para que el diálogo
+    las procese con OCR. El pegado de texto funciona como siempre."""
+
+    imagePasted = pyqtSignal(object)  # QImage
+
+    def canInsertFromMimeData(self, source):
+        if source.hasImage():
+            return True
+        return super().canInsertFromMimeData(source)
+
+    def insertFromMimeData(self, source):
+        if source.hasImage():
+            self.imagePasted.emit(source.imageData())
+            return
+        super().insertFromMimeData(source)
 
 
 class MultiPasteDialog(QDialog):
@@ -54,14 +74,16 @@ class MultiPasteDialog(QDialog):
 
         # ---- Instrucciones ----
         info = QLabel(
-            "<b>Pegue las coordenadas</b> desde Excel, WhatsApp, correo, o cualquier fuente.<br>"
+            "<b>Pegue las coordenadas</b> desde Excel, WhatsApp, correo, o cualquier fuente "
+            "— incluso una <b>captura de pantalla</b> (Ctrl+V) que se leerá con OCR.<br>"
             "<small>El plugin detectará pares Este/Norte o Lat/Lon automáticamente.</small>"
         )
         info.setWordWrap(True)
         layout.addWidget(info)
 
         # ---- Área de pegado ----
-        self.paste_text = QPlainTextEdit()
+        self.paste_text = PasteTextEdit()
+        self.paste_text.imagePasted.connect(self._on_imagen_pegada)
         mono = QFont()
         mono.setFamilies(["Consolas", "Monaco", "monospace"])
         mono.setPointSize(10)
@@ -77,6 +99,36 @@ class MultiPasteDialog(QDialog):
         )
         self.paste_text.setMinimumHeight(160)
         layout.addWidget(self.paste_text)
+
+        # v3.0.4: OCR de capturas de pantalla
+        fila_ocr = QHBoxLayout()
+        self.btn_ocr = QPushButton("📷  Pegar captura de pantalla (OCR)")
+        self.btn_ocr.setToolTip(
+            "Lee la imagen del portapapeles (Win+Shift+S) y la convierte a "
+            "texto con OCR.\nTambién puedes pegar la imagen directamente en "
+            "el cuadro con Ctrl+V.\nEl texto reconocido SIEMPRE queda a la "
+            "vista para que lo revises antes de Detectar.")
+        fila_ocr.addWidget(self.btn_ocr)
+
+        # v3.0.4: interruptor del motor nativo. Se auto-desactiva si el
+        # motor se cuelga (ver ocr_windows_native.TIMEOUT_SEGUNDOS); este
+        # checkbox es la forma de volver a activarlo cuando el usuario
+        # quiera reintentar.
+        from qgis.PyQt.QtWidgets import QCheckBox as _QCheckBox
+        from . import ocr_windows_native as _ocr_nat
+        self.chk_ocr_nativo = _QCheckBox("Motor nativo de Windows")
+        self.chk_ocr_nativo.setToolTip(
+            "Usa el reconocimiento de texto integrado en Windows 10/11 "
+            "(más rápido y sin instalar nada aparte).\n"
+            "Si se desmarca, se usará Tesseract.\n\n"
+            "Se desmarca solo si el motor nativo llega a colgarse.")
+        self.chk_ocr_nativo.setChecked(_ocr_nat.nativo_habilitado())
+        self.chk_ocr_nativo.setVisible(_ocr_nat.es_windows())
+        self.chk_ocr_nativo.toggled.connect(_ocr_nat.set_nativo_habilitado)
+        fila_ocr.addWidget(self.chk_ocr_nativo)
+        fila_ocr.addStretch(1)
+        layout.addLayout(fila_ocr)
+        self.btn_ocr.clicked.connect(self._pegar_imagen_portapapeles)
 
         # ---- Configuración del tipo de coordenadas ----
         config_group = QGroupBox("Tipo de coordenadas pegadas")
@@ -175,6 +227,157 @@ class MultiPasteDialog(QDialog):
         # Conexiones
         self.detect_btn.clicked.connect(self._detect_and_preview)
         self.paste_text.textChanged.connect(self._on_text_changed)
+
+    # ------------------------------------------------------------------
+    # v3.0.4: OCR de capturas de pantalla
+    # ------------------------------------------------------------------
+
+    def _pegar_imagen_portapapeles(self):
+        img = QApplication.clipboard().image()
+        if img is None or img.isNull():
+            QMessageBox.information(
+                self, "OCR",
+                "No hay ninguna imagen en el portapapeles.\n"
+                "Copia una captura (Win+Shift+S) y vuelve a intentar."
+            )
+            return
+        self._on_imagen_pegada(img)
+
+    def _on_imagen_pegada(self, qimage):
+        from .ocr_coords import ocr_imagen_auto, limpiar_texto_ocr
+        from . import ocr_windows_native as _ocr_native
+
+        # v3.0.4: primera vez que hay imagen y estamos en Windows sin
+        # winsdk instalado -> ofrecer instalarlo (paquete puro Python,
+        # segundos). Si el usuario dice que no, se sigue igual con
+        # Tesseract vía ocr_imagen_auto — nunca bloquea el flujo.
+        if (_ocr_native.es_windows()
+                and not _ocr_native.winsdk_disponible()
+                and not getattr(self, '_winsdk_ya_preguntado', False)):
+            self._winsdk_ya_preguntado = True
+            resp = QMessageBox.question(
+                self, "OCR — motor nativo de Windows",
+                "Windows trae un motor de reconocimiento de texto "
+                "integrado, más rápido y sin instalar nada aparte "
+                "(a diferencia de Tesseract).\n\n"
+                "Requiere un paquete Python pequeño ('winsdk', sin "
+                "ejecutables, instala en segundos).\n\n"
+                "¿Instalarlo ahora? (Puedes seguir usando Tesseract si "
+                "eliges 'No'.)",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if resp == QMessageBox.StandardButton.Yes:
+                # getattr cubre Qt5 (enum plano) y Qt6 (enum con scope):
+                # no hace falta try/except, y no deja literal sin scope.
+                cursor_inst = getattr(Qt, "CursorShape", Qt).WaitCursor
+                QApplication.setOverrideCursor(cursor_inst)
+                try:
+                    ok, salida = _ocr_native.instalar_winsdk()
+                finally:
+                    QApplication.restoreOverrideCursor()
+
+                # v3.0.4 fix: pip puede devolver éxito (returncode 0) pero
+                # haber instalado en el entorno de un python.exe DISTINTO
+                # al que corre esta sesión de QGIS (típico en instalaciones
+                # OSGeo4W con varios Python) — se verifica con un import
+                # real antes de prometer que "ya funciona".
+                if ok:
+                    ok = _ocr_native.winsdk_disponible()
+
+                if ok:
+                    QMessageBox.information(
+                        self, "Listo",
+                        "Motor nativo instalado y verificado. Se usará "
+                        "automáticamente desde ahora (no hace falta "
+                        "reiniciar QGIS).")
+                else:
+                    QMessageBox.warning(
+                        self, "No se pudo instalar",
+                        "'winsdk' no quedó disponible en el Python de "
+                        "QGIS (puede haberse instalado en un intérprete "
+                        "distinto). Se seguirá usando Tesseract mientras "
+                        "tanto.\n\nDetalle técnico:\n" + salida[-1500:])
+
+        cursor_espera = getattr(Qt, "CursorShape", Qt).WaitCursor
+        QApplication.setOverrideCursor(cursor_espera)
+        try:
+            texto = ocr_imagen_auto(qimage)
+        except RuntimeError as e:
+            QApplication.restoreOverrideCursor()
+            # El motor nativo pudo auto-desactivarse por timeout: reflejarlo
+            # en el checkbox para que el usuario vea qué pasó y pueda
+            # reactivarlo cuando quiera.
+            try:
+                self.chk_ocr_nativo.blockSignals(True)
+                self.chk_ocr_nativo.setChecked(
+                    _ocr_native.nativo_habilitado())
+                self.chk_ocr_nativo.blockSignals(False)
+            except Exception:  # nosec B110 - reflejar el estado en el
+                pass           # checkbox es cosmetico; el flujo sigue
+            if self._ofrecer_buscar_tesseract_manual(str(e)):
+                # El usuario localizó tesseract.exe a mano: reintentar
+                # una vez, ahora que la ruta quedó guardada en QSettings.
+                self._on_imagen_pegada(qimage)
+            return
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, "OCR", "El OCR falló:\n{}".format(e))
+            return
+        QApplication.restoreOverrideCursor()
+
+        texto = limpiar_texto_ocr(texto).strip()
+        if not texto:
+            QMessageBox.information(
+                self, "OCR",
+                "No se reconoció texto en la imagen.\n"
+                "Prueba con una captura más nítida o con más zoom."
+            )
+            return
+
+        actual = self.paste_text.toPlainText().rstrip()
+        self.paste_text.setPlainText(
+            (actual + "\n" if actual else "") + texto)
+        self.type_label.setText(
+            "<i>📷 Texto reconocido por OCR — <b>revísalo y corrígelo</b> "
+            "antes de presionar Detectar.</i>")
+
+    def _ofrecer_buscar_tesseract_manual(self, mensaje_error):
+        """Muestra el error de OCR con un botón extra: localizar
+        tesseract.exe a mano (cubre instalaciones en rutas atípicas que
+        ni el registro de Windows ni las rutas típicas detectan).
+
+        Devuelve True si el usuario localizó el ejecutable con éxito
+        (para que el llamador reintente el OCR una sola vez).
+        """
+        from qgis.PyQt.QtWidgets import QFileDialog
+        from .ocr_coords import guardar_ruta_manual
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("OCR no disponible")
+        box.setText(mensaje_error)
+        btn_buscar = box.addButton(
+            "📂  Buscar tesseract.exe...", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Ok)
+        box.exec()
+
+        if box.clickedButton() is not btn_buscar:
+            return False
+
+        ruta, _ = QFileDialog.getOpenFileName(
+            self, "Localizar tesseract.exe", "",
+            "tesseract.exe (tesseract.exe);;Todos los archivos (*)")
+        if not ruta:
+            return False
+        if guardar_ruta_manual(ruta):
+            QMessageBox.information(
+                self, "Listo",
+                "Ruta guardada. Reintentando el reconocimiento...")
+            return True
+        QMessageBox.warning(
+            self, "Ruta inválida",
+            "El archivo seleccionado no parece válido.")
+        return False
 
     def _on_text_changed(self):
         # Limpiar preview cuando cambia el texto

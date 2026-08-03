@@ -144,8 +144,27 @@ class TableToPolygon:
         filas_malas = [int(i) + 2 for i in invalidas.index.tolist()]
         df_ok = df.dropna(subset=['_X', '_Y'])
 
+        nombre = nombre_capa or os.path.splitext(os.path.basename(path))[0]
+        return cls._construir_poligonos(df_ok, filas_malas, field_id,
+                                        field_orden, crs_authid,
+                                        style_params, nombre)
+
+    # ------------------------------------------------------------------
+    # Constructor común (tabla o capa de puntos)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _construir_poligonos(cls, df_ok, filas_malas, field_id,
+                             field_orden, crs_authid, style_params,
+                             nombre_base):
+        """Núcleo compartido: agrupa, ordena, valida y construye la capa.
+
+        df_ok: DataFrame con columnas _X, _Y (numéricas) y los campos
+        de atributos. Usado tanto por la ruta de archivo (Excel/CSV)
+        como por la ruta de capa de puntos (v3.0.4).
+        """
         # Agrupación
-        if field_id and field_id in df.columns:
+        if field_id and field_id in df_ok.columns:
             grupos = list(df_ok.groupby(field_id, sort=True))
         else:
             grupos = [(1, df_ok)]
@@ -184,7 +203,7 @@ class TableToPolygon:
 
         # Capa en memoria
         crs = QgsCoordinateReferenceSystem(crs_authid)
-        nombre = nombre_capa or os.path.splitext(os.path.basename(path))[0]
+        nombre = nombre_base
         layer = QgsVectorLayer("Polygon?crs={}".format(crs_authid),
                                nombre, "memory")
         prov = layer.dataProvider()
@@ -226,6 +245,64 @@ class TableToPolygon:
                 filas_malas[:15], "…" if len(filas_malas) > 15 else "")
         _log(resumen)
         return layer, resumen
+
+    # ------------------------------------------------------------------
+    # v3.0.4: capa de puntos del proyecto como fuente
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def create_polygons_from_layer(cls, layer, field_id=None,
+                                   field_orden=None, style_params=None,
+                                   nombre_capa=None, solo_seleccion=False):
+        """Crea polígono(s) desde una capa de puntos ya cargada en QGIS.
+
+        Las coordenadas salen de la GEOMETRÍA (no de campos) y el CRS de
+        salida es el de la capa — sin riesgo de elegir mal la zona UTM.
+        solo_seleccion=True usa únicamente las entidades seleccionadas.
+        """
+        from qgis.core import QgsWkbTypes
+        feats = (layer.selectedFeatures() if solo_seleccion
+                 else list(layer.getFeatures()))
+        _log("Capa '{}': {} punto(s){}".format(
+            layer.name(), len(feats),
+            " (solo selección)" if solo_seleccion else ""))
+        if not feats:
+            return None, ("No hay entidades seleccionadas en la capa."
+                          if solo_seleccion
+                          else "La capa no tiene entidades.")
+
+        nombres_campos = [f.name() for f in layer.fields()]
+        filas, vacias = [], 0
+        for f in feats:
+            g = f.geometry()
+            if g is None or g.isEmpty():
+                vacias += 1
+                continue
+            if QgsWkbTypes.isMultiType(g.wkbType()):
+                pts = g.asMultiPoint()
+                if not pts:
+                    vacias += 1
+                    continue
+                p = pts[0]
+            else:
+                p = g.asPoint()
+            fila = {n: f[n] for n in nombres_campos}
+            fila['_X'] = float(p.x())
+            fila['_Y'] = float(p.y())
+            filas.append(fila)
+
+        if vacias:
+            _log("{} entidad(es) sin geometría de punto — omitidas".format(
+                vacias), Qgis.MessageLevel.Warning)
+        if not filas:
+            return None, "Ninguna entidad tiene geometría de punto válida."
+
+        df_ok = pd.DataFrame(filas)
+        nombre = nombre_capa or "{}_poligono".format(layer.name())
+        return cls._construir_poligonos(df_ok, [], field_id, field_orden,
+                                        layer.crs().authid(),
+                                        style_params, nombre)
+
 
     # ------------------------------------------------------------------
     # Estilo (mismo look de la suite: borde rojo, relleno claro, etiqueta ID)

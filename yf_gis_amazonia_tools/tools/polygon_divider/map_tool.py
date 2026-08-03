@@ -23,7 +23,8 @@ from qgis.PyQt.QtGui import QColor, QCursor, QPixmap, QPainter, QPen
 from qgis.PyQt.QtWidgets import QApplication
 
 from qgis.core import QgsWkbTypes, QgsPointXY
-from qgis.gui import QgsMapTool, QgsRubberBand
+from qgis.gui import (QgsMapTool, QgsRubberBand,
+                      QgsMapCanvasSnappingUtils, QgsSnapIndicator)
 
 from ...core.logger import log_info, log_error
 from . import division_engine as engine
@@ -74,6 +75,20 @@ class PolygonDividerMapTool(QgsMapTool):
 
         self.setCursor(self._build_cross_cursor())
 
+        # v3.0.4: snapping a vértices/segmentos de las capas del canvas.
+        # Utils PROPIO (no depende de la config de snapping del proyecto):
+        # así el trazado siempre ajusta aunque el usuario tenga el snap
+        # global apagado, y sin alterar su configuración.
+        self._snap_activo = True
+        self._snap_utils = None
+        self._snap_indicator = None
+        try:
+            self._snap_utils = self._crear_snap_utils()
+            self._snap_indicator = QgsSnapIndicator(self.canvas)
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Polygon Divider: snapping no disponible", exc_info=True)
+
     # ------------------------------------------------------------------
     # Configuración externa
     # ------------------------------------------------------------------
@@ -90,6 +105,65 @@ class PolygonDividerMapTool(QgsMapTool):
         """
         self._area_objetivo_preview = area
 
+    def set_snap_activo(self, activo):
+        """Activa/desactiva el ajuste a vértices y segmentos."""
+        self._snap_activo = bool(activo)
+        if not self._snap_activo:
+            self._ocultar_snap()
+
+    def _crear_snap_utils(self):
+        """Construye un QgsMapCanvasSnappingUtils propio: todas las capas,
+        vértice + segmento, tolerancia 14 px. Compatible Qt5/Qt6."""
+        from qgis.core import QgsProject, QgsSnappingConfig, Qgis
+        utils = QgsMapCanvasSnappingUtils(self.canvas)
+        cfg = QgsSnappingConfig(QgsProject.instance())
+        cfg.setEnabled(True)
+        try:
+            cfg.setMode(Qgis.SnappingMode.AllLayers)
+        except AttributeError:
+            cfg.setMode(getattr(QgsSnappingConfig, "SnappingMode",
+                                QgsSnappingConfig).AllLayers)
+        try:
+            cfg.setTypeFlag(Qgis.SnappingTypes(
+                Qgis.SnappingType.Vertex | Qgis.SnappingType.Segment))
+        except (AttributeError, TypeError):
+            cfg.setTypeFlag(
+                QgsSnappingConfig.SnappingType.VertexFlag
+                | QgsSnappingConfig.SnappingType.SegmentFlag)
+        try:
+            cfg.setUnits(Qgis.MapToolUnit.Pixels)
+        except AttributeError:
+            from qgis.core import QgsTolerance
+            cfg.setUnits(QgsTolerance.UnitType.Pixels)
+        cfg.setTolerance(14)
+        utils.setConfig(cfg)
+        return utils
+
+    def _punto_con_snap(self, event):
+        """Punto del evento, ajustado a vértice/segmento si corresponde.
+        Actualiza el indicador visual (cruz magenta estándar de QGIS)."""
+        if not self._snap_activo or self._snap_utils is None:
+            self._ocultar_snap()
+            return self.toMapCoordinates(event.pos())
+        try:
+            match = self._snap_utils.snapToMap(event.pos())
+            if self._snap_indicator is not None:
+                self._snap_indicator.setMatch(match)
+            if match.isValid():
+                return QgsPointXY(match.point())
+        except Exception:
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
+        return self.toMapCoordinates(event.pos())
+
+    def _ocultar_snap(self):
+        if self._snap_indicator is None:
+            return
+        try:
+            from qgis.core import QgsPointLocator
+            self._snap_indicator.setMatch(QgsPointLocator.Match())
+        except Exception:
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
+
     def angulo_actual_grados(self):
         """Ángulo de la línea trazada, en grados (0-180), para sincronizar UI."""
         return math.degrees(self._angulo_rad) % 180
@@ -105,6 +179,7 @@ class PolygonDividerMapTool(QgsMapTool):
         self._punto_actual = None
 
     def deactivate(self):
+        self._ocultar_snap()
         self._limpiar_rubber_bands()
         self.canvas.unsetCursor()
         super().deactivate()
@@ -130,7 +205,7 @@ class PolygonDividerMapTool(QgsMapTool):
         if event.button() != Qt.MouseButton.LeftButton:
             return
 
-        punto_mapa = self.toMapCoordinates(event.pos())
+        punto_mapa = self._punto_con_snap(event)
 
         if self._punto_inicio is None:
             # Primer clic: fija inicio
@@ -150,10 +225,12 @@ class PolygonDividerMapTool(QgsMapTool):
             self._punto_inicio = None
 
     def canvasMoveEvent(self, event):
+        # El indicador de snap se muestra desde antes del primer clic,
+        # para que el usuario vea a qué vértice/segmento va a anclar.
+        punto_mapa = self._punto_con_snap(event)
         if self._punto_inicio is None:
             return
 
-        punto_mapa = self.toMapCoordinates(event.pos())
         self._punto_actual = QgsPointXY(punto_mapa)
         self._actualizar_angulo()
         self._dibujar_linea()
@@ -233,6 +310,7 @@ class PolygonDividerMapTool(QgsMapTool):
         self._rb_preview.reset(QgsWkbTypes.GeometryType.PolygonGeometry)
 
     def _cancelar(self):
+        self._ocultar_snap()
         self._punto_inicio = None
         self._punto_actual = None
         self._limpiar_rubber_bands()

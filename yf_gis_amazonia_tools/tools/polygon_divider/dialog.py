@@ -113,7 +113,20 @@ class PolygonDividerDialog(QDialog):
         h_angulo.addWidget(QLabel("Ángulo:"))
         h_angulo.addWidget(self.spin_angulo)
         h_angulo.addWidget(self.btn_trazar)
-        grp_angulo.setLayout(h_angulo)
+
+        # v3.0.4: snap al trazar — dos clics sobre una línea existente
+        # reproducen exactamente su dirección (cortes colineales a linderos)
+        self.chk_snap = QCheckBox("🧲  Ajustar a vértices y segmentos (snap)")
+        self.chk_snap.setChecked(True)
+        self.chk_snap.setToolTip(
+            "Al trazar, el cursor se ancla a vértices y segmentos de las "
+            "capas visibles del proyecto.\n"
+            "Dos clics sobre una línea existente reproducen exactamente su "
+            "dirección — ideal para dividir colineal a un lindero ya trazado.")
+        v_angulo = QVBoxLayout()
+        v_angulo.addLayout(h_angulo)
+        v_angulo.addWidget(self.chk_snap)
+        grp_angulo.setLayout(v_angulo)
         layout.addWidget(grp_angulo)
 
         self.lbl_estado_linea = QLabel("Sin línea definida — usa el spinbox o traza en canvas.")
@@ -336,6 +349,8 @@ class PolygonDividerDialog(QDialog):
             area_objetivo_m2 = self.spin_area_objetivo.value() * 10000.0
             self._map_tool.set_area_objetivo_preview(area_objetivo_m2)
 
+        self._map_tool.set_snap_activo(self.chk_snap.isChecked())
+        self.chk_snap.toggled.connect(self._map_tool.set_snap_activo)
         self._map_tool.lineaActualizada.connect(self._on_linea_actualizada_canvas)
         self._map_tool.lineaCompletada.connect(self._on_linea_completada_canvas)
         self._map_tool.trazadoCancelado.connect(self._on_trazado_cancelado_canvas)
@@ -346,6 +361,7 @@ class PolygonDividerDialog(QDialog):
         if self._map_tool is not None:
             self._map_tool.limpiar()
             try:
+                self.chk_snap.toggled.disconnect()
                 self._map_tool.lineaActualizada.disconnect()
                 self._map_tool.lineaCompletada.disconnect()
                 self._map_tool.trazadoCancelado.disconnect()
@@ -709,7 +725,9 @@ class PolygonDividerDialog(QDialog):
         desde el panel de capas de QGIS (clic derecho → Exportar).
         """
         campos_resultado = outengine.construir_campos_resultado(self.layer.fields())
-        nombre_base = self.lbl_preview_nombre.text().replace(".gpkg", "") + "_temp"
+        # v3.0.4 fix: nombre propio de la capa — antes tomaba el texto de la
+        # nota informativa del label ("→ Se añadirá como capa temporal...").
+        nombre_base = "{}_dividido".format(self.layer.name())
 
         capa_memoria = outengine.crear_capa_resultado(
             nombre_base, self.layer.crs(), campos_resultado

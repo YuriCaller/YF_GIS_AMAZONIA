@@ -236,6 +236,176 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             except Exception:
                 logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
+        # 6. v3.0.4: selector de fuente (archivo vs capa de puntos)
+        self._configurar_fuente_puntos(idx_pol)
+
+    # ------------------------------------------------------------------
+    # v3.0.4: fuente alternativa — capa de puntos del proyecto
+    # ------------------------------------------------------------------
+
+    def _configurar_fuente_puntos(self, idx_pol):
+        """Agrega el selector Archivo (Excel/CSV) vs Capa de puntos."""
+        from qgis.PyQt.QtWidgets import (QGroupBox, QVBoxLayout, QHBoxLayout,
+                                          QRadioButton, QCheckBox, QLabel)
+        from qgis.gui import QgsMapLayerComboBox
+        try:
+            from qgis.core import QgsMapLayerProxyModel
+            _FILTRO_PUNTOS = getattr(
+                QgsMapLayerProxyModel, "Filter",
+                QgsMapLayerProxyModel).PointLayer
+        except (ImportError, AttributeError):
+            from qgis.core import Qgis as _Q
+            _FILTRO_PUNTOS = _Q.LayerFilter.PointLayer  # QGIS 4 / Qt6
+
+        if idx_pol < 0:
+            return
+        page = self.tabWidget.widget(idx_pol)
+        lay = page.layout()
+        if lay is None:
+            return
+
+        grp = QGroupBox("Fuente de puntos")
+        v = QVBoxLayout(grp)
+        fila = QHBoxLayout()
+        self.rbFuenteArchivo = QRadioButton("Archivo (Excel/CSV)")
+        self.rbFuenteCapa = QRadioButton("Capa de puntos del proyecto")
+        self.rbFuenteArchivo.setChecked(True)
+        fila.addWidget(self.rbFuenteArchivo)
+        fila.addWidget(self.rbFuenteCapa)
+        v.addLayout(fila)
+
+        self.cboCapaPuntos = QgsMapLayerComboBox()
+        try:
+            self.cboCapaPuntos.setFilters(_FILTRO_PUNTOS)
+        except Exception:
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
+        self.cboCapaPuntos.setToolTip(
+            "<b>Capa de puntos</b><br>Vértices ya cargados en el proyecto "
+            "(QField, PPK, shapefiles de terceros). Las coordenadas salen de "
+            "la GEOMETRÍA y el CRS es el de la capa — sin riesgo de elegir "
+            "mal la zona UTM.")
+        v.addWidget(self.cboCapaPuntos)
+
+        fila2 = QHBoxLayout()
+        self.chkSoloSeleccion = QCheckBox("Solo entidades seleccionadas")
+        self.chkSoloSeleccion.setToolTip(
+            "Construye el polígono únicamente con los puntos seleccionados "
+            "en el canvas — útil para tomar 5-10 vértices de una capa grande.")
+        self.lblCrsCapaPuntos = QLabel("")
+        fila2.addWidget(self.chkSoloSeleccion)
+        fila2.addStretch(1)
+        fila2.addWidget(self.lblCrsCapaPuntos)
+        v.addLayout(fila2)
+
+        lay.insertWidget(0, grp)
+
+        # Grupos que se ocultan en modo capa
+        from qgis.PyQt.QtWidgets import QGroupBox as _G
+        self._grpArchivoTabla = None
+        self._grpCoords = None
+        for g in page.findChildren(_G):
+            t = g.title()
+            if 'Archivo de tabla' in t:
+                self._grpArchivoTabla = g
+            elif 'Coordenadas' in t:
+                self._grpCoords = g
+
+        self.rbFuenteArchivo.toggled.connect(self._on_fuente_cambiada)
+        self.cboCapaPuntos.layerChanged.connect(self._on_capa_puntos_cambiada)
+        self._on_fuente_cambiada()
+
+    def _on_fuente_cambiada(self, *_args):
+        """Alterna visibilidad entre modo archivo y modo capa."""
+        modo_capa = self.rbFuenteCapa.isChecked()
+        self.cboCapaPuntos.setVisible(modo_capa)
+        self.chkSoloSeleccion.setVisible(modo_capa)
+        self.lblCrsCapaPuntos.setVisible(modo_capa)
+        if self._grpArchivoTabla is not None:
+            self._grpArchivoTabla.setVisible(not modo_capa)
+        if self._grpCoords is not None:
+            self._grpCoords.setVisible(not modo_capa)
+        if modo_capa:
+            self.lblHojaExcel.setVisible(False)
+            self.cboHojaExcel.setVisible(False)
+            self._on_capa_puntos_cambiada(self.cboCapaPuntos.currentLayer())
+        else:
+            fp = self.mFileWidget_csv_polygon.filePath()
+            if fp:
+                self.update_csv_fields(fp)
+
+    def _on_capa_puntos_cambiada(self, layer):
+        """Repuebla ID/orden con los campos de la capa y muestra su CRS."""
+        if not self.rbFuenteCapa.isChecked():
+            return
+        if layer is None:
+            self.lblCrsCapaPuntos.setText("")
+            return
+        self.lblCrsCapaPuntos.setText("CRS: {}".format(layer.crs().authid()))
+        campos = [f.name() for f in layer.fields()]
+        sug = self.table_to_polygon.autodetectar(campos)
+        for combo, clave, vacio in (
+                (self.cboCampoIDPol, 'id', "\u2014 Un solo pol\u00edgono \u2014"),
+                (self.cboCampoOrdenPol, 'orden',
+                 "\u2014 Orden de entidades \u2014")):
+            actual = combo.currentText()
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItem(vacio, None)
+            for c in campos:
+                combo.addItem(c, c)
+            objetivo = actual if actual in campos else sug[clave]
+            if objetivo:
+                i = combo.findText(objetivo)
+                if i >= 0:
+                    combo.setCurrentIndex(i)
+            combo.blockSignals(False)
+
+    def _run_create_polygon_desde_capa(self):
+        """v3.0.4: crea polígono(s) desde la capa de puntos elegida."""
+        try:
+            layer = self.cboCapaPuntos.currentLayer()
+            if layer is None:
+                QMessageBox.warning(self, "Advertencia",
+                                    "Seleccione una capa de puntos del "
+                                    "proyecto.")
+                return
+            solo_sel = self.chkSoloSeleccion.isChecked()
+            if solo_sel and layer.selectedFeatureCount() == 0:
+                QMessageBox.warning(self, "Advertencia",
+                                    "La capa no tiene entidades "
+                                    "seleccionadas.")
+                return
+
+            field_id = self.cboCampoIDPol.currentData()
+            field_orden = self.cboCampoOrdenPol.currentData()
+
+            style_params = {
+                'polygon_color': '255,255,255,60',
+                'border_color': '#ff340b',
+                'border_width': '0.26',
+                'label_font': 'Arial',
+                'label_size': '9',
+                'label_color': '#ff340b',
+            }
+
+            layer_out, resumen = self.table_to_polygon.create_polygons_from_layer(
+                layer, field_id=field_id, field_orden=field_orden,
+                style_params=style_params, solo_seleccion=solo_sel)
+
+            if layer_out is not None:
+                QMessageBox.information(self, "Resultado", resumen)
+                self.refresh_layer_comboboxes()
+            else:
+                QMessageBox.warning(self, "Sin resultados", resumen)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error",
+                                 "Error al crear pol\u00edgono(s) desde "
+                                 "capa:\n{}".format(e))
+            QgsMessageLog.logMessage(
+                "Error en TableToPolygon (capa): {}".format(e),
+                "YF Tools Plus", Qgis.MessageLevel.Critical)
+
     def _hoja_actual(self):
         if self.cboHojaExcel.isVisible() and self.cboHojaExcel.currentText():
             return self.cboHojaExcel.currentText()
@@ -382,7 +552,12 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
             )
 
     def run_create_polygon(self):
-        """v3.0: crea polígono(s) directo desde la tabla (Excel o CSV)."""
+        """v3.0: crea polígono(s) directo desde la tabla (Excel o CSV).
+        v3.0.4: o desde una capa de puntos del proyecto."""
+        if getattr(self, 'rbFuenteCapa', None) is not None \
+                and self.rbFuenteCapa.isChecked():
+            self._run_create_polygon_desde_capa()
+            return
         try:
             tabla = self.mFileWidget_csv_polygon.filePath()
             x_field = self.comboBox_x_field.currentText().strip()
