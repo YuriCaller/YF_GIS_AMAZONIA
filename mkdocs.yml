@@ -1,0 +1,114 @@
+site_name: YF GIS Amazonia Tools — Manual
+site_description: >-
+  Manual de la suite de herramientas GIS para catastro, forestal y
+  topografía en la Amazonía peruana.
+site_author: Yuri Fabián Caller Córdova — TUCSA
+site_url: https://yuricaller.github.io/YF_GIS_AMAZONIA/
+repo_url: https://github.com/YuriCaller/YF_GIS_AMAZONIA
+repo_name: YuriCaller/YF_GIS_AMAZONIA
+edit_uri: edit/main/docs/
+copyright: © 2025-2026 TUCSA · GPL-3.0-or-later
+
+theme:
+  name: material
+  language: es
+  logo: assets/main_icon.png
+  favicon: assets/main_icon.png
+  palette:
+    # Paleta clara: terracota como color de acento, en línea con el
+    # icono del Analizador de Superposición. Sin arcoíris.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Cambiar a modo oscuro
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Cambiar a modo claro
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+
+extra_css:
+  - assets/yf.css
+
+plugins:
+  - search:
+      lang: es
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      permalink_title: Enlace a esta sección
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.caret
+  - pymdownx.keys
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/YuriCaller
+    - icon: fontawesome/solid/globe
+      link: https://yuricaller.github.io/gis-amazonia/
+  generator: false
+
+nav:
+  - Inicio: index.md
+  - Instalación:
+      - Instalar el plugin: instalacion/index.md
+      - Componentes opcionales: instalacion/dependencias.md
+  - Herramientas:
+      - Catastral:
+          - herramientas/memoria_descriptiva.md
+          - herramientas/segmentador.md
+          - herramientas/vector_geometry.md
+          - herramientas/yf_tools_plus.md
+          - herramientas/polygon_divider.md
+          - herramientas/smart_georeferencer.md
+          - herramientas/smart_labels.md
+          - herramientas/batch_export.md
+      - Geodesia / GNSS:
+          - herramientas/gnss_postprocess.md
+      - Búsqueda y Análisis:
+          - herramientas/superposition.md
+          - herramientas/attribute_search.md
+      - Agroforestal / Ambiental:
+          - herramientas/saf_generator.md
+      - Layout / Compositor:
+          - herramientas/title_block.md
+          - herramientas/layout_tools.md
+          - herramientas/layout_rescaler.md
+      - Comparación y Navegación:
+          - herramientas/swipe.md
+          - herramientas/goto.md
+  - Casos reales:
+      - casos/superposicion_loboyoc.md
+  - Referencia:
+      - Geoservicios oficiales: referencia/geoservicios.md
+      - Preguntas frecuentes: referencia/faq.md
+      - Historial de versiones: referencia/changelog.md

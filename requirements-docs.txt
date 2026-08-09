@@ -1,0 +1,5 @@
+# Dependencias del manual. Versiones acotadas a proposito:
+# MkDocs 2.0 elimina el sistema de plugins y no ofrece ruta de migracion,
+# de modo que una actualizacion automatica romperia la publicacion.
+mkdocs>=1.6,<2.0
+mkdocs-material>=9.5,<10.0

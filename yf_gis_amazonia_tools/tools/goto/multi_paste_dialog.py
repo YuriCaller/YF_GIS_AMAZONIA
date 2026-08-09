@@ -45,6 +45,25 @@ class PasteTextEdit(QPlainTextEdit):
         return super().canInsertFromMimeData(source)
 
     def insertFromMimeData(self, source):
+        """El texto SIEMPRE tiene prioridad sobre la imagen.
+
+        v3.0.6 - correccion importante: Excel (y Word, Calc, LibreOffice)
+        colocan en el portapapeles DOS representaciones del mismo rango,
+        texto tabulado e imagen del bloque de celdas. La version anterior
+        comprobaba hasImage() primero, de modo que al pegar desde Excel se
+        descartaba el texto exacto y se hacia OCR sobre el bitmap: se
+        perdian los tabuladores y saltos de linea (los pares Este/Norte se
+        aplanaban en una sola fila) y el reconocimiento introducia errores
+        de digitos en coordenadas que ya estaban perfectas.
+
+        El OCR queda como ultimo recurso, para cuando lo unico disponible
+        es realmente una captura de pantalla.
+        """
+        if source.hasText():
+            texto = source.text()
+            if texto and texto.strip():
+                self.insertPlainText(texto)
+                return
         if source.hasImage():
             self.imagePasted.emit(source.imageData())
             return

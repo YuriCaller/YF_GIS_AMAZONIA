@@ -1,0 +1,16 @@
+/* Paleta YF GIS Amazonia.
+   Terracota (#8C3A2E) como acento: es el color del Analizador de
+   Superposicion, el modulo que emite un juicio con consecuencias
+   registrales. Petroleo (#1F6F8B) como secundario. Sin arcoiris. */
+:root {
+  --md-primary-fg-color:        #1F6F8B;
+  --md-primary-fg-color--light: #2A8CAE;
+  --md-primary-fg-color--dark:  #155268;
+  --md-accent-fg-color:         #8C3A2E;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #155268;
+  --md-accent-fg-color:  #C05A48;
+}
+.md-typeset table:not([class]) th { background-color: rgba(31,111,139,.08); }
+.md-typeset h1, .md-typeset h2 { font-weight: 600; }

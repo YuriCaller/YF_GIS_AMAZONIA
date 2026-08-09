@@ -34,23 +34,13 @@ def winsdk_disponible():
 
 
 def _localizar_python():
-    """Reutiliza la misma lógica de smart_georeferencer/dependencies.py
-    para encontrar el intérprete Python real detrás de qgis-bin.exe."""
-    import os
-    exe = sys.executable or ""
-    if "python" in os.path.basename(exe).lower():
-        return exe
-    candidatos = []
-    for n in ("python.exe", "python3.exe", "pythonw.exe"):
-        candidatos += [
-            os.path.join(sys.prefix, n),
-            os.path.join(os.path.dirname(exe), n),
-            os.path.join(sys.prefix, "Scripts", n),
-        ]
-    for c in candidatos:
-        if c and os.path.exists(c):
-            return c
-    return exe
+    """Delega en core.dependencies para no duplicar la lógica.
+
+    v3.0.6: esta función existía por triplicado en el plugin. Ahora hay
+    una sola implementación compartida.
+    """
+    from ...core.dependencies import localizar_python
+    return localizar_python()
 
 
 def instalar_winsdk(log=None):

@@ -170,9 +170,38 @@ def extract_multiple_pairs(text):
         nums = _extract_numbers(line)
         plausible_in_line = [n for n in nums if _looks_like_coordinate(n)]
 
-        # Si la línea tiene >= 2 plausibles, tomar los primeros 2
-        if len(plausible_in_line) >= 2:
-            pairs.append((plausible_in_line[0], plausible_in_line[1]))
+        # Exactamente 2: normalmente es un par Este/Norte por linea.
+        if len(plausible_in_line) == 2:
+            a, c = plausible_in_line
+            mayor, menor = max(abs(a), abs(c)), min(abs(a), abs(c))
+            # Salvo que ambos sean grandes (UTM) y de magnitud casi igual:
+            # entonces son dos Estes o dos Nortes de la misma columna, y
+            # emparejarlos daria una coordenada inexistente. Los valores
+            # pequenos (lat/lon) se emparejan siempre: una latitud y una
+            # longitud pueden parecerse legitimamente.
+            if menor > 10000 and mayor / menor < 1.5:
+                continue
+            pairs.append((a, c))
+            continue
+
+        # Mas de 2 en la misma linea: NO tomar ciegamente los dos primeros.
+        # Un renglon con once Estes seguidos daria el par (Este, Este), que
+        # se convertia luego en una latitud imposible. Se deja que lo
+        # resuelva la estrategia global, capaz de reconocer la disposicion
+        # por columnas.
+        if len(plausible_in_line) > 2:
+            e1, e2 = plausible_in_line[0], plausible_in_line[1]
+            mayor, menor = max(abs(e1), abs(e2)), min(abs(e1), abs(e2))
+            if menor > 0 and mayor / menor >= 3.0:
+                # Magnitudes muy distintas: la linea trae pares reales
+                # consecutivos (E N E N ...). Se consumen todos, no solo
+                # el primero.
+                for i in range(0, len(plausible_in_line) - 1, 2):
+                    pairs.append((plausible_in_line[i],
+                                  plausible_in_line[i + 1]))
+            # Si las magnitudes son parecidas, la linea es una columna
+            # (todos Estes o todos Nortes): se deja para la estrategia
+            # global, que sabe cruzarla con la otra columna.
             continue
 
         # Si no, intentar con la lógica completa por línea (keywords, etc.)
@@ -185,13 +214,97 @@ def extract_multiple_pairs(text):
     if pairs:
         return pairs
 
-    # Estrategia 2: todos los números plausibles del texto completo, en pares consecutivos
+    # Estrategia 2: todos los numeros plausibles del texto completo.
     nums = _extract_numbers(text)
     plausible = [n for n in nums if _looks_like_coordinate(n)]
+
+    # 2a: disposicion POR COLUMNAS. Ocurre al copiar de Excel una columna
+    # de Estes y a continuacion la de Nortes, o cuando el texto pierde los
+    # tabuladores: quedan N Estes seguidos de N Nortes. Emparejarlos de dos
+    # en dos daria (Este, Este), que es justo el error que producia
+    # coordenadas imposibles. Se detecta comparando las magnitudes de cada
+    # mitad y solo se aplica si la separacion es inequivoca.
+    columnas = _emparejar_por_columnas(plausible)
+    if columnas:
+        return columnas
+
+    # 2b: pares consecutivos (Este, Norte, Este, Norte, ...)
     pairs = []
     for i in range(0, len(plausible) - 1, 2):
         pairs.append((plausible[i], plausible[i + 1]))
     return pairs
+
+
+def _emparejar_por_columnas(valores):
+    """Empareja [E1..En, N1..Nn] como [(E1,N1), ..., (En,Nn)].
+
+    Devuelve [] si la disposicion no es claramente por columnas, para no
+    reordenar un listado que ya venia correctamente emparejado.
+
+    SEPARACION POR MAGNITUD, NO POR POSICION
+    ----------------------------------------
+    Una version anterior partia la lista por la mitad. Era fragil: basta
+    un unico valor mal leido por OCR (un 8569916 al que se le come un
+    digito y queda como 856916) para que el corte caiga en el sitio
+    equivocado y toda la deteccion se venga abajo, volviendo a emparejar
+    (Este, Este).
+
+    Ahora se clasifica cada valor por su magnitud: en UTM del hemisferio
+    sur los Estes tienen 6 digitos (10^5-10^6) y los Nortes 7 (>10^6).
+    El orden dentro de cada grupo se conserva, de modo que el i-esimo
+    Este se empareja con el i-esimo Norte aunque el texto los traiga
+    entremezclados en varios renglones.
+    """
+    n = len(valores)
+    if n < 4:
+        return []
+
+    UMBRAL = 1000000.0
+    estes = [v for v in valores if 0 < abs(v) < UMBRAL]
+    nortes = [v for v in valores if abs(v) >= UMBRAL]
+
+    if len(estes) < 2 or len(nortes) < 2:
+        return []
+
+    def _coherente(vals):
+        mags = [abs(v) for v in vals if abs(v) > 0]
+        if len(mags) != len(vals):
+            return False
+        return max(mags) / min(mags) < 3.0
+
+    def _limpiar(vals):
+        """Descarta valores atipicos respecto a la mediana del grupo.
+
+        Un OCR que se come un digito de 8569916 produce 856916, que cae
+        del lado de los Estes y desequilibra el reparto. Se elimina ANTES
+        de comprobar el equilibrio: hacerlo despues dejaba el conjunto
+        descompensado y la deteccion se rendia.
+        """
+        # Se aplica SIEMPRE, no solo cuando el grupo es incoherente: un
+        # 856916 junto a Estes de 351000 da una razon de 2.4, por debajo
+        # del umbral de coherencia, y sobrevivia desequilibrando el
+        # reparto. La banda respecto a la mediana si lo descarta.
+        if len(vals) < 3:
+            return vals
+        mags = sorted(abs(v) for v in vals)
+        mediana = mags[len(mags) // 2]
+        return [v for v in vals
+                if 0.5 * mediana <= abs(v) <= 2.0 * mediana]
+
+    estes = _limpiar(estes)
+    nortes = _limpiar(nortes)
+
+    if len(estes) < 2 or len(nortes) < 2:
+        return []
+    if not (_coherente(estes) and _coherente(nortes)):
+        return []
+
+    # Los grupos deben quedar equilibrados. Se tolera un elemento de
+    # diferencia (un valor perdido por OCR); el sobrante lo descarta zip.
+    if abs(len(estes) - len(nortes)) > 1:
+        return []
+
+    return list(zip(estes, nortes))
 
 
 # ============================================================

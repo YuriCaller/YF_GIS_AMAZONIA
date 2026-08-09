@@ -44,6 +44,50 @@ except ImportError as e:
     _MODS_ERR = str(e)
 
 
+def _recargar_modulos():
+    """Reintenta cargar los submodulos tras instalar python-docx.
+
+    generacion_documento_word importa docx en su cabecera, de modo que si
+    la dependencia faltaba al arrancar QGIS, _MODS_OK quedo en False. Sin
+    este reintento la herramienta seguiria bloqueada tras una instalacion
+    correcta, y el usuario tendria que reiniciar sin saber por que.
+    """
+    global _MODS_OK, _MODS_ERR, detectar_capas_adyacentes
+    global identificar_colindantes_completo, obtener_vertices_de_poligono
+    global calcular_area_perimetro_feature, generar_descripcion_linderos
+    global obtener_info_sistema_coordenadas, _detectar_campo
+    global generar_documento_word
+    if _MODS_OK:
+        return True
+    try:
+        from .deteccion_capas_adyacentes import (
+            detectar_capas_adyacentes as _f1)
+        from .identificacion_colindantes import (
+            identificar_colindantes_completo as _f2)
+        from .procesamiento_coordenadas import (
+            obtener_vertices_de_poligono as _f3,
+            calcular_area_perimetro_feature as _f4,
+            generar_descripcion_linderos as _f5,
+            obtener_info_sistema_coordenadas as _f6,
+            _detectar_campo as _f7,
+        )
+        from .generacion_documento_word import generar_documento_word as _f8
+    except ImportError as e:
+        _MODS_ERR = str(e)
+        return False
+    detectar_capas_adyacentes = _f1
+    identificar_colindantes_completo = _f2
+    obtener_vertices_de_poligono = _f3
+    calcular_area_perimetro_feature = _f4
+    generar_descripcion_linderos = _f5
+    obtener_info_sistema_coordenadas = _f6
+    _detectar_campo = _f7
+    generar_documento_word = _f8
+    _MODS_OK = True
+    _MODS_ERR = ""
+    return True
+
+
 class Tool(BaseTool):
     """Memoria Descriptiva tool entry point."""
 
@@ -58,14 +102,27 @@ class Tool(BaseTool):
         """Open the Memoria Descriptiva dialog."""
         from qgis.PyQt.QtWidgets import QMessageBox
 
+        # v3.0.6: en vez de un mensaje sin salida, se ofrece instalar el
+        # componente desde aquí. Se pide permiso antes: muchos usuarios
+        # trabajan en entidades con la red o los permisos restringidos, y
+        # una instalación silenciosa ahí falla sin explicar por qué.
+        global HAS_DOCX
         if not HAS_DOCX:
-            QMessageBox.critical(
-                self.iface.mainWindow(),
-                "Dependencia faltante",
-                "Requiere <b>python-docx</b>.<br>"
-                "Instale: <code>pip install python-docx</code>",
+            from ...core.dependencies import asegurar_dependencia
+            HAS_DOCX = asegurar_dependencia(
+                modulo="docx",
+                paquete="python-docx",
+                descripcion=(
+                    "Se utiliza para generar la memoria descriptiva en "
+                    "formato Word (.docx)."
+                ),
+                parent=self.iface.mainWindow(),
+                tamano_aprox="250 KB",
+                log=log_info,
             )
-            return
+            if not HAS_DOCX:
+                return
+            _recargar_modulos()
 
         if not _MODS_OK:
             QMessageBox.critical(

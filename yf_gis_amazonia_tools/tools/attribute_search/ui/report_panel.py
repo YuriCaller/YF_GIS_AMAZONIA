@@ -213,16 +213,30 @@ class ReportPanel(QWidget):
     
     def install_docx(self):
         """Install python-docx package."""
+        # v3.0.6: se sustituye la antigua llamada a pip en proceso,
+        # equipo de pip (no es reentrante y contamina el proceso de QGIS)
+        # e instala en el interprete del proceso, que en OSGeo4W no
+        # siempre es donde QGIS busca los paquetes.
         try:
-            import pip
+            from ....core.dependencies import instalar_paquete, recargar
             self.progress_bar.setVisible(True)
             self.progress_bar.setValue(10)
-            
-            # Install python-docx
-            pip.main(['install', 'python-docx'])
-            
+
+            ok, salida, diagnostico = instalar_paquete("python-docx")
             self.progress_bar.setValue(90)
-            
+            if not ok:
+                self.progress_bar.setVisible(False)
+                QMessageBox.warning(
+                    self, "No se pudo instalar",
+                    "No se pudo instalar python-docx.\n\n"
+                    "Causa probable: {}\n\n"
+                    "Puede instalarlo manualmente desde la consola de "
+                    "OSGeo4W con:\n"
+                    "python -m pip install --user python-docx"
+                    .format(diagnostico))
+                return
+            recargar("docx")
+
             # Try to import again
             import docx  # noqa: F811
             from docx import Document
