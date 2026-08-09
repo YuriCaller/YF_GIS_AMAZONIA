@@ -32,6 +32,9 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+          # Sin esto, setup-python busca requirements.txt o
+          # pyproject.toml y aborta al no encontrarlos.
+          cache-dependency-path: requirements-docs.txt
 
       - name: Instalar dependencias
         run: pip install -r requirements-docs.txt
