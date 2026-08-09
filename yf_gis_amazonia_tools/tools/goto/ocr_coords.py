@@ -28,7 +28,7 @@ Autor: Yuri Caller - TUCSA / gis-amazonia.pe
 
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404 - llamadas con lista de args y sin shell
 import tempfile
 
 URL_INSTALADOR_WIN = "https://github.com/UB-Mannheim/tesseract/wiki"

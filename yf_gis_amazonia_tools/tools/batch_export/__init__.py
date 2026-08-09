@@ -9,7 +9,7 @@ Autor: Yuri F. Caller Córdova — TUCSA / gis-amazonia.pe
 import os
 from qgis.PyQt.QtGui import QDesktopServices as __QDS
 from qgis.PyQt.QtCore import QUrl as __QURL
-import subprocess
+import subprocess  # nosec B404 - llamadas con lista de args y sin shell
 import sys
 
 from qgis.PyQt.QtWidgets import QDialog

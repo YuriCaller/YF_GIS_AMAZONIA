@@ -3,7 +3,7 @@ name=YF GIS Amazonia Tools
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
 description=Suite de 17 herramientas GIS para catastro, gestion forestal y topografia en la Amazonia peruana.
-version=3.0.7
+version=3.1.0
 author=Yuri Fabian Caller Cordova
 email=yuricaller@gmail.com
 
@@ -31,7 +31,7 @@ hasProcessingProvider=no
 
 tags=amazonia,peru,cadastre,cadastral,superposition,overlap,overlap analysis,wfs,ogc,arcgis rest,geoservices,geoservicios,serfor,sernanp,midagri,anp,protected areas,concessions,land tenure,surveying,topography,gnss,ppk,ppp,rtklib,geodesy,memoria descriptiva,atlas,word,docx,agroforestry,forestry,saf,attribute search,azimuth,vertices,coordinates,polygon,excel,swipe,compare,goto,navigate,smart labels,vector geometry,layout,rescaler,table style,title block,cajetin,batch export,layout tools,compositor,georeferencer,georeferencing,warp,tps,gcp,control points,raster,scanned plan,arcgis
 
-changelog=Version 3.0.7 (2026-08-07):
+changelog=Version 3.1.0 (2026-08-09):
  MANUAL DE USUARIO EN LINEA (NUEVO):
  * Manual publicado en https://yuricaller.github.io/YF_GIS_AMAZONIA/ con
    una pagina por herramienta, guia de instalacion, referencia de
@@ -89,6 +89,15 @@ changelog=Version 3.0.7 (2026-08-07):
    al manual, que es donde alguien puede buscarlo. description queda
    en una linea, que es lo que muestra el Administrador de Complementos.
  * homepage apunta al manual en lugar de al repositorio.
+ * Bandit queda en 0 hallazgos en las tres severidades. Los 7 avisos
+   B404 restantes (la mera importacion de subprocess) quedan anotados
+   con nosec y su justificacion: todas las llamadas usan lista de
+   argumentos y shell=False. Antes aparecian en rojo en el informe del
+   repositorio sin corresponder a un problema real.
+ * Separados tres imports multiples en una sola linea (E401) en
+   gnss_postprocess/ui/main_dialog.py y yf_tools_plus/excel_exporter.py.
+ * Verificado: 0 enumeraciones Qt sin scope y 0 llamadas a exec_() en
+   los 115 modulos; detect-secrets sin hallazgos.
  * Flake8 en plugin_manager: import sin usar, dos sentencias con punto
    y coma, variable de excepcion sin usar y espaciado de funcion. El
    traceback a stdout de la integracion con el compositor pasa al

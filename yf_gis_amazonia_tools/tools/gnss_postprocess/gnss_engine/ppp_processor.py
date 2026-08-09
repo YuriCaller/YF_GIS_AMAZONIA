@@ -9,7 +9,7 @@ Diferencias clave vs PPK:
   - Sin resolución de ambigüedad (armode=0)
 """
 import os
-import subprocess
+import subprocess  # nosec B404 - llamadas con lista de args y sin shell
 import platform
 import stat
 import shutil

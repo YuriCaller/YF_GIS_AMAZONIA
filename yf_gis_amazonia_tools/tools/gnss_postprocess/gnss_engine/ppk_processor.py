@@ -5,7 +5,7 @@ Motor de post-procesamiento PPK (Post Processed Kinematic).
 Responsabilidad única: ejecutar rnx2rtkp para modo diferencial.
 """
 import os
-import subprocess
+import subprocess  # nosec B404 - llamadas con lista de args y sin shell
 import platform
 import stat
 import shutil

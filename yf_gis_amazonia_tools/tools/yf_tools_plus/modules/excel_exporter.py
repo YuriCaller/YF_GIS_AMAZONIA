@@ -16,7 +16,7 @@ import os
 from qgis.PyQt.QtGui import QDesktopServices as __QDS
 from qgis.PyQt.QtCore import QUrl as __QURL
 import sys
-import subprocess
+import subprocess  # nosec B404 - llamadas con lista de args y sin shell
 from qgis.core import QgsVectorLayer, QgsVectorFileWriter, QgsMessageLog, Qgis, QgsProject
 from qgis.PyQt.QtWidgets import QMessageBox
 
@@ -117,7 +117,9 @@ class ExcelExporter:
         """Abre el archivo con la app predeterminada. En Windows usa
         os.startfile (el más fiable para lanzar Excel); si falla, cae a
         QDesktopServices y luego a subprocess."""
-        import os as _os, sys as _sys, subprocess as _sp
+        import os as _os
+        import sys as _sys
+        import subprocess as _sp  # nosec B404 - args en lista, sin shell
         abspath = _os.path.abspath(file_path)
         # 1) Windows: os.startfile
         if _os.name == 'nt':

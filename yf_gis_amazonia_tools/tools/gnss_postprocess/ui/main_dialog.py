@@ -1832,7 +1832,8 @@ precisión, nunca más de la que los datos respaldan.</p>
                 self._log(f'⚠ Ficha IGN no generada: {ex}', 'warn')
 
         # Abrir automáticamente
-        import subprocess, sys
+        import subprocess  # nosec B404 - args en lista, sin shell
+        import sys
         for path in [rpt_path, ficha_path]:
             if not path or not os.path.isfile(path):
                 continue
