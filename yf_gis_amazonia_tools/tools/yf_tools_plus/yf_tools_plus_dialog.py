@@ -700,48 +700,68 @@ class YF_Tools_PlusDialog(QDialog, FORM_CLASS):
 
     def run_recalcular(self):
         """
-        Recalcula los atributos geométricos (longitud, azimut, ángulos, coordenadas)
-        en las capas de Segmentos y/o Vértices seleccionadas.
-        Los campos heredados del polígono origen NO se modifican.
+        Copia longitud y azimut de la capa de segmentos a la de vertices y
+        renumera los IDs de ambas en secuencia 1..n.
+
+        Requiere AMBAS capas: el emparejamiento es entre ellas (cada punto
+        con el segmento que arranca en el). No se modifica ninguna geometria.
         """
         try:
             capa_lin = self.mLayerComboBox_recalc_lineas.currentLayer()
             capa_pnt = self.mLayerComboBox_recalc_puntos.currentLayer()
 
-            if not capa_lin and not capa_pnt:
+            faltan = []
+            if not capa_lin:
+                faltan.append("\u2022 Capa de Segmentos (l\u00edneas)")
+            if not capa_pnt:
+                faltan.append("\u2022 Capa de V\u00e9rtices (puntos)")
+            if faltan:
                 QMessageBox.warning(
-                    self,
-                    "Advertencia",
-                    "Debe seleccionar al menos una capa para recalcular.\n\n"
-                    "\u2022 Capa de Segmentos (l\u00edneas)\n"
-                    "\u2022 Capa de V\u00e9rtices (puntos)"
-                )
+                    self, "Faltan capas",
+                    "El recalculo necesita las dos capas: toma la longitud y el\n"
+                    "azimut de los segmentos y los copia a los vertices.\n\n"
+                    "Falta seleccionar:\n" + "\n".join(faltan))
                 return
 
-            ok_lin, ok_pnt = self.segmentator.recalcular_atributos(capa_lin, capa_pnt)
+            if capa_lin.id() == capa_pnt.id():
+                QMessageBox.warning(
+                    self, "Capas repetidas",
+                    "Seleccionaste la misma capa en los dos campos.")
+                return
 
-            partes = []
-            if capa_lin:
-                estado = "\u2714 OK" if ok_lin else "\u2718 Error"
-                partes.append("Segmentos '" + capa_lin.name() + "': " + estado)
-            if capa_pnt:
-                estado = "\u2714 OK" if ok_pnt else "\u2718 Error"
-                partes.append("V\u00e9rtices  '" + capa_pnt.name() + "': " + estado)
+            if capa_lin.geometryType() != 1 or capa_pnt.geometryType() != 0:
+                QMessageBox.warning(
+                    self, "Tipo de geometria incorrecto",
+                    "La capa de segmentos debe ser de lineas y la de vertices\n"
+                    "de puntos. Revisa la seleccion.")
+                return
 
-            if ok_lin or ok_pnt:
+            self.segmentator.recalcular_atributos(capa_lin, capa_pnt)
+            rep = getattr(self.segmentator, "ultimo_reporte", None)
+
+            if rep is None:
+                QMessageBox.warning(
+                    self, "Recalculo con errores",
+                    "No se pudo completar. Revisa el Log de Mensajes de QGIS.")
+                return
+
+            # rep["ok"] es False cuando hay advertencias, aunque se haya
+            # escrito: el usuario debe leerlas antes de dar por bueno el cuadro.
+            if rep.get("avisos"):
+                QMessageBox.warning(self, "Recalculo con advertencias",
+                                    rep["mensaje"])
+                self.iface.messageBar().pushMessage(
+                    "YF Tools Plus",
+                    "Recalculo terminado con advertencias",
+                    level=Qgis.MessageLevel.Warning, duration=5)
+            else:
+                QMessageBox.information(self, "Recalculo completado",
+                                        rep["mensaje"])
                 self.iface.messageBar().pushMessage(
                     "YF Tools Plus",
                     "\u2714 Atributos recalculados correctamente",
-                    level=Qgis.MessageLevel.Success,
-                    duration=3
-                )
-                QMessageBox.information(self, "Recalculo completado", "\n".join(partes))
-            else:
-                QMessageBox.warning(
-                    self,
-                    "Recalculo con errores",
-                    "\n".join(partes) + "\n\nRevise el Log de Mensajes de QGIS para m\u00e1s detalles."
-                )
+                    level=Qgis.MessageLevel.Success, duration=3)
+
 
         except Exception as e:
             QMessageBox.critical(

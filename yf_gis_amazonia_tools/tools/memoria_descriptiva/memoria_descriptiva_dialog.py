@@ -44,6 +44,7 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
         self.setupUi(self)
 
         self._crear_panel_atlas_solicitante()  # Panel que reemplaza al solicitante en atlas
+        self._crear_panel_predio()             # Panel "Identificación del Predio"
         self._crear_tab_modo()                 # Pestaña "Modo de Trabajo"
         self._crear_tab_campos()               # Pestaña "Campos"
 
@@ -68,6 +69,7 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
         self._reorganizar_ui()   # Fase 2: títulos, duplicados, botones
         self._configurar_generalidades()  # Fase 2: método/equipo de levantamiento
         self._instalar_ayudas()           # Fase 2: tooltips explicativos
+        self._crear_selectores_bd()       # Combos 'desde la tabla' en cada campo
 
     # =========================================================================
     # PANEL ATLAS-SOLICITANTE (se inserta debajo del groupSolicitante)
@@ -127,6 +129,234 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
         # Insertar en la posición 0 (encima del groupSolicitante) en el tab
         tab_layout.insertWidget(0, self.panelAtlasSolicitante)
         self.panelAtlasSolicitante.setVisible(False)  # Oculto hasta activar atlas
+
+    def _crear_panel_predio(self):
+        """Panel de identificación del predio: nombre y condición.
+
+        El nombre del predio es distinto del nombre del titular. Puede
+        venir de un campo de la capa de polígonos (recomendado en modo
+        atlas, donde cada predio tiene el suyo) o escribirse a mano.
+        La condición (matriz / fracción / remanente) es opcional.
+        """
+        tab_layout = self.tabDatosBasicos.layout()
+
+        self.panelPredio = QtWidgets.QGroupBox("Identificación del Predio")
+        self.panelPredio.setStyleSheet(
+            "QGroupBox { font-weight: bold; color: #17375E; "
+            "background: #F4F0E6; border: 2px solid #17375E; "
+            "border-radius: 6px; margin-top: 8px; padding-top: 8px; } "
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; }")
+
+        form = QtWidgets.QFormLayout()
+        form.setSpacing(8)
+
+        lbl_nota = QtWidgets.QLabel(
+            "<i>El nombre del predio aparece en el encabezado del documento.<br>"
+            "No es el nombre del titular, que va en Datos del Solicitante.</i>")
+        lbl_nota.setWordWrap(True)
+        lbl_nota.setStyleSheet("color: #17375E; font-size: 10px; padding: 4px;")
+        form.addRow(lbl_nota)
+
+        self.cboCampoNombrePredio = QtWidgets.QComboBox()
+        self.cboCampoNombrePredio.setToolTip(
+            "Campo de la capa de polígonos con el nombre del predio.\n"
+            "Ejemplo: PREDIO, nom_predio, denominacion.\n"
+            "Déjalo en '-- Sin campo --' para escribirlo a mano abajo.")
+        self.cboCampoNombrePredio.currentIndexChanged.connect(
+            self._actualizar_preview_nombre_predio)
+        form.addRow("Campo Nombre del Predio:", self.cboCampoNombrePredio)
+
+        self.txtNombrePredio = QtWidgets.QLineEdit()
+        self.txtNombrePredio.setPlaceholderText("Ej.: Las Mercedes")
+        self.txtNombrePredio.setToolTip(
+            "Nombre del predio escrito a mano.\n"
+            "Solo se usa si no seleccionaste un campo arriba.")
+        form.addRow("...o nombre manual:", self.txtNombrePredio)
+
+        self.cboTipoPredio = QtWidgets.QComboBox()
+        self.cboTipoPredio.addItem("-- Sin condición --", "")
+        self.cboTipoPredio.addItem("Predio Matriz", "MATRIZ")
+        self.cboTipoPredio.addItem("Predio Fracción", "FRACCIÓN")
+        self.cboTipoPredio.addItem("Predio Remanente", "REMANENTE")
+        self.cboTipoPredio.setToolTip(
+            "Condición del predio en el saneamiento.\n"
+            "Aparece en el encabezado: 'PREDIO MATRIZ: LAS MERCEDES'.")
+        form.addRow("Condición:", self.cboTipoPredio)
+
+        self.lblPreviewNombrePredio = QtWidgets.QLabel("")
+        self.lblPreviewNombrePredio.setStyleSheet(
+            "color: #555; font-size: 10px; padding: 2px 4px;")
+        self.cboTipoPredio.currentIndexChanged.connect(
+            self._actualizar_preview_nombre_predio)
+        self.txtNombrePredio.textChanged.connect(
+            self._actualizar_preview_nombre_predio)
+        form.addRow("Encabezado:", self.lblPreviewNombrePredio)
+
+        self.panelPredio.setLayout(form)
+        tab_layout.insertWidget(0, self.panelPredio)
+
+    def _actualizar_preview_nombre_predio(self):
+        """Muestra cómo quedará el encabezado del documento."""
+        nombre = ""
+        campo = self.cboCampoNombrePredio.currentData()
+        if campo:
+            lid = self.cboPoligonos.currentData()
+            layer = QgsProject.instance().mapLayer(lid) if lid else None
+            if layer:
+                feats = list(layer.getFeatures())
+                if feats:
+                    try:
+                        v = feats[0][campo]
+                        nombre = str(v).strip() if v else ""
+                    except Exception:
+                        nombre = ""
+        if not nombre:
+            nombre = self.txtNombrePredio.text().strip()
+        if not nombre:
+            nombre = self.txtSector.text().strip()
+
+        tipo = self.cboTipoPredio.currentData() or ""
+        etiqueta = "PREDIO {}".format(tipo) if tipo else "PREDIO"
+        if nombre:
+            texto = "{}: {}".format(etiqueta, nombre.upper())
+        elif tipo:
+            texto = etiqueta
+        else:
+            texto = "(sin subtítulo)"
+        self.lblPreviewNombrePredio.setText("<b>{}</b>".format(texto))
+
+    # =========================================================================
+    # SELECTORES "DESDE LA TABLA" (solicitante y ubicacion)
+    # =========================================================================
+
+    # clave interna -> (widget, etiqueta, candidatos de autodeteccion)
+    CAMPOS_BD = [
+        ('nombre',       'txtNombre',       'Nombre',
+         ['NombresApellidos', 'nombre', 'nom_tit', 'propietario', 'titular']),
+        ('dni',          'txtDNI',          'DNI',
+         ['dni', 'DNI', 'doc', 'documento', 'nro_doc']),
+        ('sector',       'txtSector',       'Sector',
+         ['SECTOR', 'sector', 'nom_sector', 'localidad', 'CASERIO', 'caserio']),
+        ('zona',         'txtZona',         'Zona',
+         ['ZONA', 'zona', 'nom_zona']),
+        ('distrito',     'txtDistrito',     'Distrito',
+         ['DISTRITO', 'distrito', 'nom_dist', 'DIST']),
+        ('provincia',    'txtProvincia',    'Provincia',
+         ['PROVINCIA', 'provincia', 'nom_prov', 'PROV']),
+        ('departamento', 'txtDepartamento', 'Departamento',
+         ['DEPARTAMEN', 'DEPARTAMENTO', 'departamento', 'nom_dpto', 'DPTO']),
+    ]
+
+    def _crear_selectores_bd(self):
+        """Coloca un combo junto a cada campo de texto para tomar su valor
+        de la tabla de atributos.
+
+        El QLineEdit no se toca: se saca de su fila del QFormLayout y se
+        reinserta dentro de un contenedor horizontal junto al combo. Asi no
+        hay que modificar el .ui y los nombres de widget siguen siendo los
+        mismos para el resto del codigo.
+        """
+        self._combos_bd = {}
+
+        for clave, attr, etiqueta, _cands in self.CAMPOS_BD:
+            widget = getattr(self, attr, None)
+            if widget is None:
+                continue
+            contenedor = widget.parentWidget()
+            layout = contenedor.layout() if contenedor else None
+            if not isinstance(layout, QtWidgets.QFormLayout):
+                continue
+
+            fila, rol = layout.getWidgetPosition(widget)
+            if fila < 0:
+                continue
+
+            combo = QtWidgets.QComboBox()
+            combo.setMinimumWidth(150)
+            combo.setToolTip(
+                "Tomar {} desde un campo de la capa de poligonos.\n"
+                "En modo atlas cada predio usa su propio valor.\n"
+                "Deja '-- Manual --' para escribirlo a mano.".format(etiqueta.lower()))
+            combo.addItem('-- Manual --', None)
+            combo.currentIndexChanged.connect(
+                lambda _i, c=clave: self._on_campo_bd_changed(c))
+
+            caja = QtWidgets.QWidget()
+            h = QtWidgets.QHBoxLayout(caja)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(4)
+            layout.removeWidget(widget)
+            h.addWidget(widget, 3)
+            h.addWidget(combo, 2)
+            layout.setWidget(fila, QtWidgets.QFormLayout.FieldRole, caja)
+
+            self._combos_bd[clave] = combo
+
+    def _on_campo_bd_changed(self, clave):
+        """Al elegir un campo, el cuadro muestra el valor del primer predio
+        y pasa a solo lectura; al volver a manual, se libera."""
+        combo = self._combos_bd.get(clave)
+        attrs = dict((c, a) for c, a, _e, _x in self.CAMPOS_BD)
+        widget = getattr(self, attrs[clave], None)
+        if combo is None or widget is None:
+            return
+
+        campo = combo.currentData()
+        if not campo:
+            widget.setReadOnly(False)
+            widget.setStyleSheet("")
+            widget.setPlaceholderText("")
+            return
+
+        valor = self._valor_primer_feature(campo)
+        widget.setText(valor or "")
+        widget.setReadOnly(True)
+        widget.setStyleSheet("background: #EDF2F7; color: #17375E;")
+        widget.setPlaceholderText("(desde el campo {})".format(campo))
+        if hasattr(self, 'lblPreviewNombrePredio'):
+            self._actualizar_preview_nombre_predio()
+
+    def _valor_primer_feature(self, campo):
+        """Valor del campo en el primer poligono, como vista previa."""
+        lid = self.cboPoligonos.currentData()
+        if not lid or not campo:
+            return ""
+        layer = QgsProject.instance().mapLayer(lid)
+        if not layer:
+            return ""
+        try:
+            feats = list(layer.getFeatures())
+            if not feats:
+                return ""
+            v = feats[0][campo]
+            return str(v).strip() if v not in (None, "") else ""
+        except Exception:
+            return ""
+
+    def _poblar_combos_bd(self, campos):
+        """Rellena los combos con los campos de la capa de poligonos y
+        autodetecta el mas probable para cada uno."""
+        if not hasattr(self, '_combos_bd'):
+            return
+        for clave, _attr, _etiqueta, candidatos in self.CAMPOS_BD:
+            combo = self._combos_bd.get(clave)
+            if combo is None:
+                continue
+            anterior = combo.currentData()
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItem('-- Manual --', None)
+            for c in campos:
+                combo.addItem(c, c)
+            if anterior and anterior in campos:
+                combo.setCurrentIndex(combo.findData(anterior))
+            combo.blockSignals(False)
+            if not anterior:
+                for cand in candidatos:
+                    idx = combo.findData(cand)
+                    if idx >= 0:
+                        combo.setCurrentIndex(idx)
+                        break
 
     def _actualizar_preview_predio(self):
         """Muestra un ejemplo con el valor del primer polígono."""
@@ -348,6 +578,12 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
             cbo.clear(); cbo.addItem('-- Automático --', None)
             for c in campos: cbo.addItem(c, c)
 
+        # Combo de nombre del predio (panel Identificación del Predio)
+        if hasattr(self, 'cboCampoNombrePredio'):
+            self.cboCampoNombrePredio.clear()
+            self.cboCampoNombrePredio.addItem('-- Sin campo (manual) --', None)
+            for c in campos: self.cboCampoNombrePredio.addItem(c, c)
+
         # Combos del panel atlas solicitante
         self.cboAtlasCampoNombre.clear()
         self.cboAtlasCampoNombre.addItem('-- Seleccione campo --', None)
@@ -376,8 +612,13 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
         self._sel(self.cboCampoArea,          ['Area_ha','area_ha','AREA_HA','area','AREA','hectareas'])
         self._sel(self.cboCampoPerimetro,     ['Perímetro','Perimetro','PERIMETRO','perimetro','perimeter'])
         self._sel(self.cboCampoIdPoligono,    ['fid','FID','FID_','fid_','id','ID','objectid'])
+        self._sel(self.cboCampoNombrePredio,  ['PREDIO','predio','nom_predio','NOM_PREDIO',
+                                               'denominacion','DENOMINACION','nombre_predio'])
+
+        self._poblar_combos_bd(campos)
 
         self._actualizar_preview_predio()
+        self._actualizar_preview_nombre_predio()
 
     def actualizar_campos_puntos(self):
         lid = self.cboPuntos.currentData()
@@ -498,6 +739,21 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
             'atlas_solicitante': {
                 'campo_nombre': self.cboAtlasCampoNombre.currentData(),
                 'campo_dni':    self.cboAtlasCampoDNI.currentData(),
+            },
+
+            # ── Campos tomados de la tabla de atributos ──────────────────
+            # clave -> campo de la capa de polígonos (None = manual).
+            # En modo atlas se resuelven por cada predio.
+            'campos_bd': {k: c.currentData()
+                          for k, c in getattr(self, '_combos_bd', {}).items()},
+
+            # ── Identificación del predio ─────────────────────────────
+            # Nombre del PREDIO (distinto del titular) y su condición.
+            # 'campo_nombre' tiene prioridad; si es None se usa 'nombre_manual'.
+            'predio': {
+                'campo_nombre':  self.cboCampoNombrePredio.currentData(),
+                'nombre_manual': self.txtNombrePredio.text().strip(),
+                'tipo':          self.cboTipoPredio.currentData() or '',
             },
 
             # ── Datos comunes (se repiten en todas las memorias) ───────────────

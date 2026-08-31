@@ -330,13 +330,34 @@ class Segmentator:
 
     def recalcular_atributos(self, capa_lineas, capa_puntos):
         """
-        Recalcula longitud, azimut, ángulos, coordenadas y LADO
-        en capas existentes. Los campos heredados NO se tocan.
-        Soporta recalculo por ID_Vertice reordenado por posición norte (v2.3).
+        Copia longitud/azimut de los segmentos a los vertices y renumera los
+        IDs de ambas capas en secuencia 1..n. No modifica ninguna geometria.
+
+        Requiere AMBAS capas: el emparejamiento es entre ellas, punto por
+        vertice inicial de segmento. Sustituye a _recalc_lineas/_recalc_puntos,
+        que se conservan mas abajo sin uso por si hace falta volver atras.
         """
-        ok_lin = self._recalc_lineas(capa_lineas) if capa_lineas else False
-        ok_pnt = self._recalc_puntos(capa_puntos)  if capa_puntos else False
-        return ok_lin, ok_pnt
+        from .recalculo_atributos import recalcular_atributos as _recalc
+
+        if not capa_lineas or not capa_puntos:
+            QgsMessageLog.logMessage(
+                "Se requieren ambas capas: segmentos (lineas) y vertices (puntos).",
+                "YF Tools", Qgis.MessageLevel.Warning)
+            return False, False
+
+        try:
+            res = _recalc(capa_puntos, capa_lineas)
+            nivel = (Qgis.MessageLevel.Success if res["ok"]
+                     else Qgis.MessageLevel.Warning)
+            QgsMessageLog.logMessage(res["mensaje"], "YF Tools", nivel)
+            self.ultimo_reporte = res
+            hubo_cambios = res["n"] > 0
+            return hubo_cambios, hubo_cambios
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                "Error recalculando atributos: " + str(e) + "\n" + traceback.format_exc(),
+                "YF Tools", Qgis.MessageLevel.Critical)
+            return False, False
 
     def _recalc_lineas(self, capa):
         try:

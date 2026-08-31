@@ -170,6 +170,29 @@ def generar_documento_word(datos_formulario, datos_procesados, sufijo_archivo=No
 # SECCIONES
 # =============================================================================
 
+def _subtitulo_predio(df, dp):
+    """Arma el subtítulo del encabezado a partir del nombre del predio y
+    su condición. Devuelve '' si no hay nada que mostrar.
+
+    Ejemplos:
+        'PREDIO MATRIZ: LAS MERCEDES'
+        'PREDIO FRACCIÓN: LAS MERCEDES'
+        'PREDIO: LAS MERCEDES'      (sin condición)
+        'PREDIO MATRIZ'             (con condición, sin nombre)
+    """
+    nombre = (dp.get('nombre_predio') or '').strip()
+    tipo   = (dp.get('tipo_predio') or '').strip()
+
+    # Sin nombre de predio configurado, se cae al sector como referencia
+    if not nombre:
+        nombre = (df.get('ubicacion', {}).get('sector') or '').strip()
+
+    etiqueta = 'PREDIO {}'.format(tipo.upper()) if tipo else 'PREDIO'
+    if nombre:
+        return '{}: {}'.format(etiqueta, nombre.upper())
+    return etiqueta if tipo else ''
+
+
 def _encabezado(doc, df, dp):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -178,13 +201,15 @@ def _encabezado(doc, df, dp):
     r.font.name='Arial'; r.font.size=Pt(16); r.font.bold=True
     r.font.color.rgb = RGBColor(0x17,0x37,0x5E)
 
-    # Subtítulo con nombre del predio/propietario
-    nombre_predio = dp.get('nombre_propietario','') or df.get('ubicacion',{}).get('sector','')
-    if nombre_predio:
+    # Subtítulo: NOMBRE DEL PREDIO y su condición (matriz/fracción/remanente).
+    # Es el nombre del predio, no el del titular: el titular va en la
+    # sección I (Datos del Solicitante).
+    subtitulo = _subtitulo_predio(df, dp)
+    if subtitulo:
         p2 = doc.add_paragraph()
         p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p2.paragraph_format.space_before = Pt(0); p2.paragraph_format.space_after = Pt(2)
-        r2 = p2.add_run('PREDIO DE: {}'.format(nombre_predio.upper()))
+        r2 = p2.add_run(subtitulo)
         r2.font.name='Arial'; r2.font.size=Pt(12); r2.font.bold=True
         r2.font.color.rgb = RGBColor(0x2E,0x6E,0x3E)
 
@@ -304,7 +329,7 @@ def _s_colindantes(doc, dat):
 def _s_tecnica(doc, dp):
     _heading(doc, 'V.   INFORMACIÓN TÉCNICA DEL PREDIO', 1)
     vertices=dp.get('vertices',[]); area=dp.get('area',0); perimetro=dp.get('perimetro',0)
-    desc=dp.get('descripcion_linderos',''); fuente_area=dp.get('fuente_area','')
+    desc=dp.get('descripcion_linderos','')
 
     # 5.1
     _heading(doc, '5.1.   Linderos y Medidas Perimétricas', 2)
@@ -343,10 +368,9 @@ def _s_tecnica(doc, dp):
     _heading(doc, '5.3.   Área y Perímetro', 2)
     try:
         ah=float(area); am2=round(ah*10000,2)
-        nota_fuente=' [Fuente: {}]'.format(fuente_area) if fuente_area else ''
         txt=('El predio tiene una superficie total de {:,.4f} hectáreas '
-             '({:,.2f} m²) y un perímetro de {:,.2f} metros lineales.{}'.format(
-             ah, am2, float(perimetro), nota_fuente))
+             '({:,.2f} m²) y un perímetro de {:,.2f} metros lineales.'.format(
+             ah, am2, float(perimetro)))
     except Exception: txt='Los datos de área y perímetro no están disponibles.'
     _pj(doc, txt, spb=4, spa=6)
 

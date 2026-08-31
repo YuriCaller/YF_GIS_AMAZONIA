@@ -351,6 +351,8 @@ class Tool(BaseTool):
                     "descripcion_linderos": generar_descripcion_linderos(
                         vertices, fmt_az[0], fmt_az[1]),
                     "nombre_propietario": nombre_prop,
+                    "nombre_predio": self._extraer_nombre_predio(feature, datos),
+                    "tipo_predio": datos.get("predio", {}).get("tipo", ""),
                     "modo_azimut": fmt_az[0],
                     "decimales_azimut": fmt_az[1],
                 }
@@ -361,6 +363,7 @@ class Tool(BaseTool):
                     dp["mapa_png"] = self._render_mapa_predio(feature, pol_layer)
 
                 datos_doc = dict(datos)
+                datos_doc["ubicacion"] = self._resolver_ubicacion(feature, datos)
                 datos_doc["_nombre_propietario_actual"] = nombre_prop
                 datos_doc["_dni_actual"] = dni_prop
 
@@ -488,9 +491,64 @@ class Tool(BaseTool):
         print("  ID polígono (FID nativo QGIS): {}".format(fid))
         return fid
 
+    def _valor_campo_bd(self, feature, campo):
+        """Valor de un campo de la capa para este feature, o None."""
+        if not campo:
+            return None
+        try:
+            if campo not in [f.name() for f in feature.fields()]:
+                return None
+            v = feature[campo]
+            if v in (None, ""):
+                return None
+            texto = str(v).strip()
+            return texto if texto and texto.upper() != "NULL" else None
+        except Exception:
+            return None
+
+    def _resolver_ubicacion(self, feature, datos):
+        """Ubicacion del predio, con los campos que el usuario mando leer
+        de la tabla sobrescribiendo lo escrito a mano."""
+        ubic = dict(datos.get("ubicacion", {}))
+        cbd = datos.get("campos_bd", {})
+        for clave in ("sector", "zona", "distrito", "provincia", "departamento"):
+            v = self._valor_campo_bd(feature, cbd.get(clave))
+            if v:
+                ubic[clave] = v
+        return ubic
+
+    def _extraer_nombre_predio(self, feature, datos):
+        """Nombre del PREDIO para este feature (no el del titular).
+
+        Prioridad: campo de la capa -> nombre manual del formulario -> ''.
+        En modo atlas cada polígono aporta el suyo desde el campo.
+        """
+        cfg = datos.get("predio", {})
+        campo = cfg.get("campo_nombre")
+        if campo:
+            try:
+                if campo in [f.name() for f in feature.fields()]:
+                    v = feature[campo]
+                    if v not in (None, ""):
+                        texto = str(v).strip()
+                        if texto and texto.upper() != "NULL":
+                            return texto
+            except Exception:
+                pass
+        return (cfg.get("nombre_manual") or "").strip()
+
     def _extraer_nombre_dni(self, feature, datos):
         fnames = [f.name() for f in feature.fields()]
         es_atlas = datos.get("modo", "unico") in ("atlas_completo", "atlas_seleccion")
+
+        # Los selectores "desde la tabla" tienen prioridad en cualquier modo
+        cbd = datos.get("campos_bd", {})
+        n_bd = self._valor_campo_bd(feature, cbd.get("nombre"))
+        d_bd = self._valor_campo_bd(feature, cbd.get("dni"))
+        if n_bd or d_bd:
+            sol = datos.get("solicitante", {}) or {}
+            return (n_bd or sol.get("nombre", "") or "",
+                    d_bd or sol.get("dni", "") or "")
 
         if es_atlas:
             campo_nombre = datos.get("atlas_solicitante", {}).get("campo_nombre")
