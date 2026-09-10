@@ -24,7 +24,7 @@ DATOS QUE ITERAN con cada polígono (atlas):
 DATOS QUE SE REPITEN en todas las memorias (atlas):
   - Ubicación (sector, distrito, provincia, departamento, zona UTM)
   - Generalidades
-  - Info del mapa (datum, elipsoide, grillado)
+  - Info del mapa (datum, proyección, elipsoide)
   - Colindantes (manual o auto-detectados)
 """
 
@@ -32,6 +32,8 @@ import os
 from qgis.PyQt import uic, QtWidgets
 from qgis.PyQt.QtCore import Qt
 from qgis.core import QgsProject, QgsVectorLayer
+
+from ...core.qt_compat import FieldRole
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'memoria_descriptiva_dialog_base.ui'))
@@ -47,6 +49,7 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
         self._crear_panel_predio()             # Panel "Identificación del Predio"
         self._crear_tab_modo()                 # Pestaña "Modo de Trabajo"
         self._crear_tab_campos()               # Pestaña "Campos"
+        self._crear_tab_reconstruir()          # Pestaña "Reconstruir predio"
 
         # ── Conexiones ──────────────────────────────────────────────────────
         self.chkDetectarColindantes.toggled.connect(
@@ -288,7 +291,7 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
             layout.removeWidget(widget)
             h.addWidget(widget, 3)
             h.addWidget(combo, 2)
-            layout.setWidget(fila, QtWidgets.QFormLayout.FieldRole, caja)
+            layout.setWidget(fila, FieldRole, caja)
 
             self._combos_bd[clave] = combo
 
@@ -378,6 +381,19 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
     # =========================================================================
     # PESTAÑA MODO DE TRABAJO
     # =========================================================================
+
+    def _crear_tab_reconstruir(self):
+        """Pestaña inversa: del cuadro de vertices al poligono.
+
+        Aislada en su propio modulo y con fallo silencioso: si algo falla
+        ahi, el dialogo debe seguir abriendo y generando memorias.
+        """
+        try:
+            from .reconstruccion import instalar
+            instalar(self)
+        except ImportError as e:
+            print("Aviso: pestaña Reconstruir predio no disponible: "
+                  "{}".format(e))
 
     def _crear_tab_modo(self):
         self.tabModo = QtWidgets.QWidget()
@@ -773,7 +789,7 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
                 'Sistema de coordenadas': self.txtSistema.text().strip(),
                 'Unidades':   self.txtUnidades.text().strip(),
                 'Elipsoide':  self.txtElipsoide.text().strip(),
-                'Grillado':   self.txtGrillado.text().strip()
+                'Proyección': self.txtProyeccion.text().strip()
             },
             'colindantes': {
                 'detectar_automatico': self.chkDetectarColindantes.isChecked(),
@@ -926,9 +942,10 @@ class MemoriaDescriptivaDialog(QtWidgets.QDialog, FORM_CLASS):
                 "vecinos en las capas del proyecto y toma su campo NOMBRE. "
                 "Verifica el resultado: si no hay vecino, usa 'Terrenos del Estado'."),
             # ── Info T\u00e9cnica ──
-            'txtGrillado': (
-                "<b>Grillado</b><br>Separaci\u00f3n de la grilla de coordenadas del plano "
-                "(ej. 'Cada 500 metros'). Debe coincidir con el plano impreso."),
+            'txtProyeccion': (
+                "<b>Proyecci\u00f3n</b><br>Proyecci\u00f3n cartogr\u00e1fica del predio, deducida "
+                "del SRC de la capa: familia, zona, meridiano central y factor de "
+                "escala. Se rellena sola al elegir la capa de pol\u00edgonos."),
         }
         for nombre, texto in AYUDAS.items():
             w = getattr(self, nombre, None)

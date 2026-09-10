@@ -8,7 +8,72 @@ y el proyecto usa [Versionado Semantico](https://semver.org/lang/es/).
 
 ---
 
-## 3.1.0 - 2026-08-09
+## 3.4.0 - 2026-09-10
+
+Reune el trabajo de las iteraciones internas 3.2.0 a 3.3.3, que no llegaron a
+publicarse. Dos de ellas contenian regresiones ya corregidas aqui, por lo que
+no se distribuyen por separado.
+
+### RECONSTRUIR PREDIO DESDE LA MEMORIA DESCRIPTIVA (NUEVO)
+
+- Memoria Descriptiva gana una pestaña que hace la operacion inversa de la herramienta: en vez de generar la memoria a partir del poligono, reconstruye el poligono a partir del cuadro de vertices. Para los expedientes que llegan con la memoria en Word o PDF y sin shapefile.
+- No es una herramienta nueva de la suite: no se registra en tools_catalog.py ni en plugin_manager.py, no anade icono al menu ni a la barra. Siguen siendo 17 herramientas.
+- La tabla se pega desde Excel, Word, Google Sheets o copiada de un PDF, con deteccion automatica del separador (tabulador, punto y coma, o dos o mas espacios). Nunca se parte por un espacio simple, que destrozaria un colindante como "Terrenos del Estado".
+- El rol de cada columna se propone por el encabezado y se valida contra el contenido: una columna titulada "Lado" que trae "V1-V2" no se acepta como distancia.
+- Vista previa con marcado por fila y el rumbo por cuadrante en el tooltip del azimut, que delata un azimut leido al reves antes de dibujar nada.
+- Azimuts en decimal, en grados-minutos-segundos y como rumbo por cuadrante. El parseo rechaza en vez de adivinar: un rumbo mayor de 90 grados o un cuadrante incompleto son error.
+- Correccion de norte con el modelo WMM que ya usa la suite: se elige entre magnetico, verdadero o de cuadricula, se indica la fecha del trabajo de campo y la declinacion se calcula en el origen.
+- Error de cierre lineal y relativo. La compensacion Bowditch es opcional y se niega si el error supera la tolerancia o si hay linderos naturales: compensar un cierre malo no lo arregla, lo esconde.
+- Los linderos sin azimut (quebrada, carretera) se respetan como tales. Si el lindero natural es el ultimo lado, su longitud calculada se compara con la declarada como control de origen y declinacion.
+- La capa resultante guarda declinacion, convergencia, cierre y procedencia en los atributos.
+
+### AREA Y PERIMETRO (correcciones)
+
+- Un campo de area o perimetro en 0, NULL o vacio se trata como dato AUSENTE y se usa la geometria. Antes un 0.0 se aceptaba como area valida y la memoria salia con 0.0000 ha sin avisar.
+- La deteccion automatica de area suma POLY_AREA, Shape_Area, SHAPE_STAr y area_m2. Faltaban los nombres que genera ArcGIS con Calculate Geometry, de modo que en capas de ese origen el perimetro se detectaba y el area no.
+- La deteccion de unidad ya no usa el umbral "> 5000" para elegir entre m2 y hectareas. Ese criterio fallaba en predios urbanos: un lote de 3000 m2 se leia como hectareas y la memoria declaraba 3000 ha en vez de 0.3. Ahora se comparan ambas interpretaciones contra la geometria.
+- Nuevo aviso de desvio: si el area del campo se aparta mas de 0.1% de la geometria, se genera la memoria pero se avisa en el resumen final con la diferencia en metros cuadrados. El cuadro de vertices describe la geometria; si el area no cuadra, el documento se contradice a si mismo y eso es observable en registro.
+- El desvio se mide contra la medida elipsoidal Y la plana, y solo avisa si no cuadra con ninguna, porque un campo calculado en UTM plano difiere ~0.06% de la elipsoidal en Madre de Dios.
+
+### INFORMACION TECNICA DEL MAPA (rehecha)
+
+- El campo «Grillado» se sustituye por «Proyeccion», deducida del SRC: familia, zona, hemisferio, meridiano central y factor de escala. El anterior era un texto fijo que no describia nada del proyecto.
+- CORRECCION IMPORTANTE: el datum ya no se escribe a mano. La version anterior extraia el numero de zona con una expresion regular y anteponia «Datum WGS 84» literal, de modo que una capa en PSAD56 o Peru96 se declaraba como WGS 84 en la memoria. Un datum falso en un documento registral, y justo en expedientes PETT, que suelen venir en PSAD56.
+- El elipsoide se resuelve a nombre legible en vez del codigo EPSG, las unidades se leen del SRC y se anade el codigo EPSG al sistema de coordenadas.
+
+### ROBUSTEZ Y COMPATIBILIDAD
+
+- Memoria Descriptiva reintenta cargar sus submodulos siempre que _MODS_OK sea False, no solo cuando falta python-docx. Antes, con docx ya instalado, nunca se reintentaba y la herramienta mostraba indefinidamente el error de la carga anterior; reinstalar el ZIP no lo resolvia porque el fallo estaba en memoria y no en disco.
+- Nuevo _purgar_submodulos(): saca de sys.modules los submodulos de la herramienta antes de reintentar, para que la recarga relea el disco.
+- Qt6 / QGIS 4.2: corregidos QFormLayout.FieldRole y setTextFormat con entero, ambos validos en PyQt5 y rotos en PyQt6. El primero impedia construir el dialogo de Memoria Descriptiva en QGIS 4.2.
+- qt_compat exporta ItemIsEnabled, ItemIsSelectable, Stretch, RichText, PlainText, FieldRole, LabelRole y SpanningRole.
+- procesamiento_coordenadas ya no llama a toProj4(), retirado en QGIS 4.
+
+### REORGANIZACION INTERNA
+
+- formato_catastral.py sube de tools/memoria_descriptiva/ a core/. Ya era la fuente unica de verdad del formato de azimut, pero vivia dentro de una herramienta y core/ no puede depender de tools/.
+- Nuevo core/poligonal.py: recorrido de poligonales, parseo de azimuts y distancias, cierre y compensacion. Nucleo en Python puro, sin Qt ni QGIS, testeable sin levantar el entorno.
+- Nuevo core/pegado_poligonal.py: pegado de tablas de azimut y distancia. Distinto de paste_helpers.py, que resuelve pares de coordenadas.
+- yf_declinacion expone convergencia_punto(), antes solo accesible desde expresiones.
+
+### CONOCIDO
+
+- El vinculo entre poligono y vertices sigue apoyandose en que el campo identificador del poligono coincida con el correlativo que el Segmentador escribe en ID_Poligono, que arranca en 1. En capas de origen ArcGIS esos valores no coinciden y OBJECTID puede no ser unico. Mientras no se unifique, conviene fijar el campo de relacion a mano en la pestaña Campos.
+
+## 3.1.0 - 2026-09-07
+
+### AZIMUT MAGNETICO PARA TRABAJO DE CAMPO (NUEVO)
+
+- Calcular Geometria Vectorial anade seis campos opcionales para capas de lineas: azimut magnetico, azimut magnetico de campo redondeado a 0.5 grados, contrarrumbo magnetico, declinacion aplicada, convergencia de meridianos y fecha con modelo empleado. Ninguno viene marcado por defecto.
+- La conversion completa es Az_magnetico = Az_cuadricula + convergencia - declinacion. La convergencia de meridianos se calcula por geodesica sobre la propia proyeccion y no se omite: es pequena en el centro de una zona UTM pero llega a grado y medio en los bordes.
+- La declinacion se obtiene del World Magnetic Model de NOAA evaluado en el centroide de cada tramo, o se ingresa a mano si se midio en campo, eligiendo magnitud y sentido (Oeste / Este) en vez de un valor con signo, que es donde se cometen los errores.
+- El campo de fecha registra si el valor salio del modelo o de una medicion propia. Un azimut magnetico sin fecha es inservible a los pocos anos: la declinacion deriva, y en Madre de Dios lo hace unos 0.23 grados por ano. Un plano de 2010 que aplicara 6.7 grados hoy estaria corrido mas de tres grados, unos 60 metros de deriva lateral por kilometro de trocha.
+- El azimut magnetico es de USO EXCLUSIVO DE CAMPO. El azimut de cuadricula sigue siendo el que rige el replanteo oficial y la reproduccion de coordenadas, y asi se advierte en el propio dialogo.
+- Nuevas funciones de expresion en el grupo YF Amazonia, disponibles tambien en la calculadora de campos de QGIS y en modo atlas: yf_declinacion, yf_variacion_anual, yf_convergencia, yf_az_cuadricula, yf_az_magnetico, yf_contra_az, yf_rumbo_campo y yf_gms.
+- yf_az_cuadricula devuelve NULL en tramos sinuosos, coherente con la convencion de linderos de quebrada, que no tienen azimut.
+- Fuera del periodo de vigencia del modelo el calculo no extrapola en silencio: devuelve NULL con el rango valido en el mensaje.
+- Nuevo componente opcional pygeomag (~250 KB), que se solicita solo al marcar alguno de los campos magneticos en modo automatico.
+- Se retiran del dialogo los campos de coordenadas de inicio y fin en capas de lineas.
 
 ### MANUAL DE USUARIO EN LINEA (NUEVO)
 

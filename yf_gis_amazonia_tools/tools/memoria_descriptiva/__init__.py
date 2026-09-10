@@ -44,6 +44,19 @@ except ImportError as e:
     _MODS_ERR = str(e)
 
 
+def _purgar_submodulos():
+    """Saca de sys.modules los submodulos de esta herramienta.
+
+    Sin esto el reintento puede no servir de nada: si un submodulo quedo
+    cacheado con el contenido de una version anterior, `import` lo devuelve
+    tal cual y nunca se relee el disco.
+    """
+    import sys
+    prefijo = __name__ + "."
+    for nombre in [m for m in sys.modules if m.startswith(prefijo)]:
+        del sys.modules[nombre]
+
+
 def _recargar_modulos():
     """Reintenta cargar los submodulos tras instalar python-docx.
 
@@ -125,10 +138,22 @@ class Tool(BaseTool):
             _recargar_modulos()
 
         if not _MODS_OK:
+            # Reintento incondicional. Al actualizar el plugin, QGIS refresca
+            # los archivos en disco pero puede dejar vivo este paquete con
+            # _MODS_OK en False y el error de la version anterior guardado en
+            # _MODS_ERR. Sin este reintento el usuario ve indefinidamente un
+            # fallo que ya esta corregido, y reinstalar el ZIP no lo saca de
+            # ahi porque el error esta en memoria, no en disco.
+            _purgar_submodulos()
+            _recargar_modulos()
+
+        if not _MODS_OK:
             QMessageBox.critical(
                 self.iface.mainWindow(),
                 "Error de módulos",
-                f"Error al cargar módulos internos:<br>{_MODS_ERR}",
+                "Error al cargar módulos internos:<br>{}<br><br>"
+                "Si acabas de actualizar el complemento, reinicia QGIS."
+                .format(_MODS_ERR),
             )
             return
 
@@ -212,7 +237,7 @@ class Tool(BaseTool):
                 ("txtSistema", "Sistema de coordenadas"),
                 ("txtUnidades", "Unidades"),
                 ("txtElipsoide", "Elipsoide"),
-                ("txtGrillado", "Grillado"),
+                ("txtProyeccion", "Proyección"),
             ]:
                 w = getattr(self.dlg, attr, None)
                 if w and not w.text():
@@ -295,6 +320,7 @@ class Tool(BaseTool):
 
         generados = []
         errores = []
+        avisos_area = []
 
         for i, feature in enumerate(features):
             if prog.wasCanceled():
@@ -327,6 +353,8 @@ class Tool(BaseTool):
                     "campo_perimetro": datos["campos"]["campo_perimetro"],
                 }
                 ap = calcular_area_perimetro_feature(feature, pol_layer, campos_pol)
+                for _av in ap.get("avisos", []):
+                    avisos_area.append((self._extraer_nombre_predio(feature, datos), _av))
 
                 if datos["colindantes"]["detectar_automatico"]:
                     capas_adj = detectar_capas_adyacentes(pol_layer)
@@ -395,6 +423,16 @@ class Tool(BaseTool):
                 msg += "• {} → <small>{}</small><br>".format(nombre, os.path.basename(path))
             if len(generados) > 15:
                 msg += "<i>... y {} más</i><br>".format(len(generados) - 15)
+            if avisos_area:
+                # Un area que no cuadra con el cuadro de vertices hace que el
+                # documento se contradiga a si mismo. No es un error de
+                # generacion, pero el usuario tiene que verlo ANTES de firmar.
+                msg += ("<br><b style='color:#b26a00'>Revisar area ({}):</b>"
+                        "<br>").format(len(avisos_area))
+                for n, a in avisos_area[:5]:
+                    msg += "• {}: <small>{}</small><br>".format(n, a)
+                if len(avisos_area) > 5:
+                    msg += "<i>... y {} mas</i><br>".format(len(avisos_area) - 5)
             if errores:
                 msg += "<br><b style='color:red'>Errores ({}):</b><br>".format(len(errores))
                 for n, e in errores[:5]:

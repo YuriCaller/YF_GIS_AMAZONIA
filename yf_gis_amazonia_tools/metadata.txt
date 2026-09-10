@@ -3,7 +3,7 @@ name=YF GIS Amazonia Tools
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
 description=Suite de 17 herramientas GIS para catastro, gestion forestal y topografia en la Amazonia peruana.
-version=3.1.0
+version=3.4.0
 author=Yuri Fabian Caller Cordova
 email=yuricaller@gmail.com
 
@@ -31,10 +31,13 @@ hasProcessingProvider=no
 
 tags=amazonia,peru,cadastre,cadastral,superposition,overlap,overlap analysis,wfs,ogc,arcgis rest,geoservices,geoservicios,serfor,sernanp,midagri,anp,protected areas,concessions,land tenure,surveying,topography,gnss,ppk,ppp,rtklib,geodesy,memoria descriptiva,atlas,word,docx,agroforestry,forestry,saf,attribute search,azimuth,vertices,coordinates,polygon,excel,swipe,compare,goto,navigate,smart labels,vector geometry,layout,rescaler,table style,title block,cajetin,batch export,layout tools,compositor,georeferencer,georeferencing,warp,tps,gcp,control points,raster,scanned plan,arcgis
 
-changelog=Version 3.1.0: manual de usuario en linea; memoria descriptiva con
-    nombre y condicion del predio (matriz / fraccion / remanente) y campos
-    que se completan desde la tabla de atributos; recalculo de atributos
-    reescrito para linderos de quebrada.
+changelog=Version 3.4.0: Memoria Descriptiva reconstruye el predio a partir del
+    cuadro de vertices pegado desde Excel, Word o PDF, con correccion de
+    declinacion magnetica por modelo WMM, error de cierre y compensacion
+    Bowditch; el datum ya no se escribe a mano, de modo que una capa en PSAD56
+    deja de declararse como WGS 84; nueva fila Proyeccion en la informacion
+    tecnica del mapa; area y perimetro caen a la geometria cuando el campo esta
+    en cero y avisan si se apartan de ella; compatibilidad Qt6 / QGIS 4.2.
 
     Changelog completo:
     https://github.com/YuriCaller/YF_GIS_AMAZONIA/blob/main/yf_gis_amazonia_tools/CHANGELOG.md

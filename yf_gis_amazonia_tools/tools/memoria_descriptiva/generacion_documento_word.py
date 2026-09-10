@@ -14,7 +14,7 @@ from docx.oxml import OxmlElement
 import os
 from datetime import datetime
 
-from . import formato_catastral as fc
+from ...core import formato_catastral as fc
 
 _MESES = {'January':'enero','February':'febrero','March':'marzo','April':'abril',
           'May':'mayo','June':'junio','July':'julio','August':'agosto',

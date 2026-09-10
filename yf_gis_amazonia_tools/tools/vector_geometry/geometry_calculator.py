@@ -137,8 +137,61 @@ def calcular_poligono(layer, opciones, target_crs_authid=None, solo_seleccion=Fa
 # LÍNEAS
 # ─────────────────────────────────────────────────────────────────────────────
 
+MAG_KEYS = {"az_mag", "az_mag_campo", "contra_mag",
+            "declinacion", "conv_merid", "fecha_decl"}
+
+
+def _datos_magneticos(geom, crs, fecha, decl_manual=None):
+    """(declinacion, convergencia, etiqueta) en el centroide de la geometria.
+
+    decl_manual: declinacion en grados con signo (Este +, Oeste -) medida en
+    campo. Si viene, sustituye al modelo; la convergencia se sigue calculando
+    porque depende de la proyeccion, no del campo magnetico.
+
+    Se apoya en core/yf_declinacion.py: declinacion por WMM y convergencia
+    de meridianos por geodesica. Lanza ValueError con mensaje legible si
+    falta pygeomag o si la fecha cae fuera de la vigencia del modelo.
+    """
+    from ...core.yf_declinacion import (
+        _anio_decimal, _convergencia, _declinacion, _modelo)
+
+    p = geom.centroid().asPoint()
+    if crs.isGeographic():
+        lon, lat, gamma = p.x(), p.y(), 0.0
+    else:
+        tr = QgsCoordinateTransform(
+            crs, QgsCoordinateReferenceSystem("EPSG:4326"),
+            QgsProject.instance())
+        q = tr.transform(p.x(), p.y())
+        lon, lat = q.x(), q.y()
+        gamma = _convergencia(round(p.x(), 0), round(p.y(), 0), crs.authid())
+
+    if decl_manual is not None:
+        etq = "%s manual %.2f%s" % (
+            str(fecha)[:10] if fecha else "s/f", abs(decl_manual),
+            "E" if decl_manual >= 0 else "W")
+        return float(decl_manual), gamma, etq
+
+    anio = _anio_decimal(fecha)
+    try:
+        d = _declinacion(round(lat, 1), round(lon, 1), round(anio, 2))
+    except ImportError:
+        raise ValueError(
+            "El azimut magnetico necesita el paquete pygeomag. Instalalo "
+            "desde el gestor de dependencias del plugin y vuelve a intentar.")
+    except ValueError as e:
+        _gm, epoca, nombre, fin = _modelo()
+        raise ValueError(
+            "Fecha fuera de la vigencia de %s (%.1f-%.1f). %s"
+            % (nombre, epoca, fin, e))
+
+    _gm, _ep, nombre, _fin = _modelo()
+    etiqueta = "%s %s" % (str(fecha)[:10] if fecha else "hoy", nombre)
+    return d, gamma, etiqueta
+
+
 def calcular_linea(layer, opciones, target_crs_authid=None, solo_seleccion=False,
-                   metodo="elipsoidal"):
+                   metodo="elipsoidal", fecha=None, decl_manual=None):
     da = _get_distance_area(layer, target_crs_authid)
     crs_efectivo = (QgsCoordinateReferenceSystem(target_crs_authid)
                     if target_crs_authid else layer.crs())
@@ -152,6 +205,9 @@ def calcular_linea(layer, opciones, target_crs_authid=None, solo_seleccion=False
         "azimut_gms": QVariant_String,
         "inicio_x": QVariant_Double, "inicio_y": QVariant_Double,
         "fin_x": QVariant_Double, "fin_y": QVariant_Double,
+        "az_mag": QVariant_Double, "az_mag_campo": QVariant_Double,
+        "contra_mag": QVariant_Double, "declinacion": QVariant_Double,
+        "conv_merid": QVariant_Double, "fecha_decl": QVariant_String,
     }
     for key, fname in opciones.items():
         _ensure_field(layer, fname, tipo_por_key[key])
@@ -170,12 +226,34 @@ def calcular_linea(layer, opciones, target_crs_authid=None, solo_seleccion=False
         vertices = list(geom.vertices())
         if vertices:
             p0, pn = vertices[0], vertices[-1]
-            if "azimut_dec" in opciones or "azimut_gms" in opciones:
+            _pide_az = ({"azimut_dec", "azimut_gms"} | MAG_KEYS) & set(opciones)
+            if _pide_az:
                 az = calcular_azimut(p0, pn)
                 if "azimut_dec" in opciones:
                     updates[opciones["azimut_dec"]] = round(az, 6)
                 if "azimut_gms" in opciones:
                     updates[opciones["azimut_gms"]] = azimut_a_gms(az)
+
+                if MAG_KEYS & set(opciones):
+                    # USO EXCLUSIVO DE CAMPO: el azimut de cuadricula es el
+                    # que rige el replanteo oficial.
+                    _d, _g, _etq = _datos_magneticos(
+                        geom, crs_efectivo, fecha, decl_manual)
+                    az_mag = (az + _g - _d) % 360
+                    if "az_mag" in opciones:
+                        updates[opciones["az_mag"]] = round(az_mag, 4)
+                    if "az_mag_campo" in opciones:
+                        # redondeado a 0.5 grados: es lo que resuelve una
+                        # brujula de mano, no los segundos
+                        updates[opciones["az_mag_campo"]] = round(az_mag * 2) / 2 % 360
+                    if "contra_mag" in opciones:
+                        updates[opciones["contra_mag"]] = round((az_mag + 180) % 360, 4)
+                    if "declinacion" in opciones:
+                        updates[opciones["declinacion"]] = round(_d, 4)
+                    if "conv_merid" in opciones:
+                        updates[opciones["conv_merid"]] = round(_g, 4)
+                    if "fecha_decl" in opciones:
+                        updates[opciones["fecha_decl"]] = _etq
             if "inicio_x" in opciones:
                 updates[opciones["inicio_x"]] = round(p0.x(), 4)
             if "inicio_y" in opciones:

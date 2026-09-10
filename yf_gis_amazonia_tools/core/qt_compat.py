@@ -7,6 +7,7 @@ API differences between PyQt5 (QGIS ≤ 3.34) and PyQt6 (QGIS ≥ 3.40).
 """
 
 from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtWidgets import QHeaderView
 
 # ── Enum compatibility ──────────────────────────────────────────────
 # In PyQt6, enums moved to scoped syntax (e.g., Qt.AlignmentFlag.AlignCenter)
@@ -45,6 +46,17 @@ Vertical = _resolve_enum(Qt, "Orientation.Vertical", "Vertical")
 WaitCursor = _resolve_enum(Qt, "CursorShape.WaitCursor", "WaitCursor")
 
 UserRole = _resolve_enum(Qt, "ItemDataRole.UserRole", "UserRole")
+ItemIsEnabled = _resolve_enum(Qt, "ItemFlag.ItemIsEnabled", "ItemIsEnabled")
+ItemIsSelectable = _resolve_enum(Qt, "ItemFlag.ItemIsSelectable", "ItemIsSelectable")
+Stretch = _resolve_enum(QHeaderView, "ResizeMode.Stretch", "Stretch")
+RichText = _resolve_enum(Qt, "TextFormat.RichText", "RichText")
+PlainText = _resolve_enum(Qt, "TextFormat.PlainText", "PlainText")
+
+from qgis.PyQt.QtWidgets import QFormLayout
+
+FieldRole = _resolve_enum(QFormLayout, "ItemRole.FieldRole", "FieldRole")
+LabelRole = _resolve_enum(QFormLayout, "ItemRole.LabelRole", "LabelRole")
+SpanningRole = _resolve_enum(QFormLayout, "ItemRole.SpanningRole", "SpanningRole")
 
 # ── QVariant compatibility ──────────────────────────────────────────
 try:

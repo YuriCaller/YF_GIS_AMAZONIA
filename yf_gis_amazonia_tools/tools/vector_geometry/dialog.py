@@ -10,9 +10,10 @@ from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QGroupBox, QCheckBox, QComboBox, QLineEdit,
     QLabel, QDialogButtonBox, QMessageBox,
-    QSizePolicy, QFrame, QWidget, QPushButton
+    QSizePolicy, QFrame, QWidget, QPushButton, QDateEdit,
+    QRadioButton, QDoubleSpinBox
 )
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, QDate
 from qgis.core import QgsWkbTypes
 
 # EPSG favoritos para Madre de Dios / Peru
@@ -40,6 +41,12 @@ DEFAULTS_NOMBRE = {
     "inicio_y":    "ini_y",
     "fin_x":       "fin_x",
     "fin_y":       "fin_y",
+    "az_mag":       "az_mag",
+    "az_mag_campo": "az_mag_campo",
+    "contra_mag":   "contra_mag",
+    "declinacion":  "decl_mag",
+    "conv_merid":   "conv_merid",
+    "fecha_decl":   "fecha_decl",
     # punto
     "coord_x":     "coord_x",
     "coord_y":     "coord_y",
@@ -275,10 +282,12 @@ class VectorGeometryDialog(QDialog):
                 ("longitud_m",  "Longitud en metros"),
                 ("azimut_dec",  "Azimut decimal (°)"),
                 ("azimut_gms",  "Azimut GMS (°′″)"),
-                ("inicio_x",    "Punto inicio X"),
-                ("inicio_y",    "Punto inicio Y"),
-                ("fin_x",       "Punto fin X"),
-                ("fin_y",       "Punto fin Y"),
+                ("az_mag",       "Azimut magnético (°)"),
+                ("az_mag_campo", "Azimut magnético de campo (0.5°)"),
+                ("contra_mag",   "Contrarrumbo magnético (°)"),
+                ("declinacion",  "Declinación aplicada (°)"),
+                ("conv_merid",   "Convergencia de meridianos (°)"),
+                ("fecha_decl",   "Fecha y modelo del cálculo"),
             ]
             defaults_on = {"longitud_m", "azimut_gms"}
 
@@ -302,6 +311,75 @@ class VectorGeometryDialog(QDialog):
             self._rows[key] = row
             self.campos_layout.addWidget(row)
 
+        if self.geom_type == 1:
+            self.campos_layout.addWidget(self._bloque_declinacion())
+
+    def _bloque_declinacion(self):
+        """Fecha del cálculo magnético + advertencia de uso."""
+        caja = QGroupBox("Declinación magnética")
+        lay = QVBoxLayout(caja)
+
+        # ── Modo automático (WMM) ───────────────────────────────────
+        self.rb_decl_auto = QRadioButton(
+            "Calcular automáticamente (modelo WMM según la ubicación)")
+        self.rb_decl_auto.setChecked(True)
+        lay.addWidget(self.rb_decl_auto)
+
+        fila_f = QHBoxLayout()
+        fila_f.addSpacing(22)
+        fila_f.addWidget(QLabel("Fecha del cálculo:"))
+        self.date_decl = QDateEdit()
+        self.date_decl.setCalendarPopup(True)
+        self.date_decl.setDisplayFormat("dd/MM/yyyy")
+        self.date_decl.setDate(QDate.currentDate())
+        fila_f.addWidget(self.date_decl)
+        fila_f.addStretch()
+        lay.addLayout(fila_f)
+
+        # ── Modo manual ─────────────────────────────────────────────
+        self.rb_decl_manual = QRadioButton(
+            "Ingresar declinación medida en campo")
+        lay.addWidget(self.rb_decl_manual)
+
+        fila_m = QHBoxLayout()
+        fila_m.addSpacing(22)
+        fila_m.addWidget(QLabel("Declinación:"))
+        self.spin_decl = QDoubleSpinBox()
+        self.spin_decl.setRange(0.0, 45.0)
+        self.spin_decl.setDecimals(2)
+        self.spin_decl.setSingleStep(0.25)
+        self.spin_decl.setSuffix(" °")
+        fila_m.addWidget(self.spin_decl)
+        self.combo_decl_sentido = QComboBox()
+        self.combo_decl_sentido.addItem("Oeste (W)", -1)
+        self.combo_decl_sentido.addItem("Este (E)", 1)
+        fila_m.addWidget(self.combo_decl_sentido)
+        fila_m.addStretch()
+        lay.addLayout(fila_m)
+
+        def _sync():
+            auto = self.rb_decl_auto.isChecked()
+            self.date_decl.setEnabled(auto)
+            self.spin_decl.setEnabled(not auto)
+            self.combo_decl_sentido.setEnabled(not auto)
+
+        self.rb_decl_auto.toggled.connect(lambda _: _sync())
+        _sync()
+
+        aviso = QLabel(
+            "El azimut magnético es de USO EXCLUSIVO DE CAMPO. El azimut de "
+            "cuadrícula es el que rige el replanteo oficial y la reproducción "
+            "de coordenadas. La declinación cambia con los años: por eso se "
+            "guarda junto con la fecha y el modelo empleado. Usa el modo "
+            "manual solo si mediste la declinación en terreno; en Perú es "
+            "Oeste, y un valor tomado de un GPS antiguo puede estar varios "
+            "grados desactualizado."
+        )
+        aviso.setWordWrap(True)
+        aviso.setStyleSheet("color: #8a6d00;")
+        lay.addWidget(aviso)
+        return caja
+
     # ─────────────────────────────────────────────────────────────────
     # Helpers
     # ─────────────────────────────────────────────────────────────────
@@ -322,6 +400,23 @@ class VectorGeometryDialog(QDialog):
 
     def get_crs(self):
         return self.combo_crs.currentData()
+
+    def get_fecha(self):
+        """Fecha ISO para el cálculo magnético (None si no aplica)."""
+        w = getattr(self, "date_decl", None)
+        return w.date().toString("yyyy-MM-dd") if w is not None else None
+
+    def get_declinacion_manual(self):
+        """Declinación en grados con signo (Este +, Oeste -).
+
+        Devuelve None cuando el modo automático está activo, que es lo que
+        el calculador interpreta como "usar el modelo WMM".
+        """
+        rb = getattr(self, "rb_decl_manual", None)
+        if rb is None or not rb.isChecked():
+            return None
+        signo = self.combo_decl_sentido.currentData()
+        return float(self.spin_decl.value()) * float(signo)
 
     def get_metodo(self):
         """Retorna 'planar' o 'elipsoidal' según la selección."""

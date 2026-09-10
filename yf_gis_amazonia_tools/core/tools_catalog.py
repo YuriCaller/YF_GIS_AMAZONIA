@@ -82,7 +82,9 @@ HERRAMIENTAS = (
     Herramienta(
         "memoria_descriptiva", "Memoria Descriptiva",
         "Genera la memoria descriptiva en Word a partir del polígono, "
-        "con cuadro de vértices, narrativa de colindancias y croquis.",
+        "con cuadro de vértices, narrativa de colindancias y croquis. "
+        "También al revés: reconstruye el predio pegando el cuadro de "
+        "vértices, con corrección de declinación magnética.",
         "Catastral", "1.0.0", "memoria_descriptiva.png"),
     Herramienta(
         "segmentador", "Segmentador de Parcelas",

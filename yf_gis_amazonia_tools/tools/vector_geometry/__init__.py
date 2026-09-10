@@ -133,8 +133,26 @@ class Tool(BaseTool):
                 count = calcular_poligono(layer, opciones, target_crs, solo_sel,
                                           metodo=dlg.get_metodo())
             elif geom_type == 1:
+                # El azimut magnetico en modo automatico necesita el modelo
+                # WMM. Se pide el componente solo si el usuario marco alguno
+                # de esos campos, no al abrir la herramienta.
+                from .geometry_calculator import MAG_KEYS
+                if MAG_KEYS & set(opciones) and dlg.get_declinacion_manual() is None:
+                    from ...core.dependencies import asegurar_dependencia
+                    if not asegurar_dependencia(
+                            "pygeomag", "pygeomag",
+                            "Calcula la declinacion magnetica con el modelo "
+                            "WMM de NOAA para convertir el azimut de "
+                            "cuadricula en azimut de brujula. Tambien puedes "
+                            "cancelar e ingresar la declinacion a mano en el "
+                            "dialogo.",
+                            parent=self.iface.mainWindow(),
+                            tamano_aprox="250 KB"):
+                        return
                 count = calcular_linea(layer, opciones, target_crs, solo_sel,
-                                       metodo=dlg.get_metodo())
+                                       metodo=dlg.get_metodo(),
+                                       fecha=dlg.get_fecha(),
+                                       decl_manual=dlg.get_declinacion_manual())
             else:
                 count = calcular_punto(layer, opciones, target_crs, solo_sel)
 

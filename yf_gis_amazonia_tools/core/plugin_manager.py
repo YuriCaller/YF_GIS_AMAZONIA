@@ -87,6 +87,17 @@ class YFGISAmazonia:
         except Exception:
             logging.getLogger(__name__).debug("sys.path", exc_info=True)
 
+        # Funciones de expresion (azimut magnetico). Van despues de
+        # asegurar_sys_path porque dependen de pygeomag, que vive en la
+        # carpeta de dependencias del perfil. Si falta, las funciones no
+        # se registran y el resto del plugin arranca igual.
+        try:
+            from .yf_declinacion import registrar_funciones
+            registrar_funciones()
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "funciones de expresion", exc_info=True)
+
         # Create the top-level menu in the menu bar
         menu_bar = self.iface.mainWindow().menuBar()
         self.menu = QMenu(self.MENU_NAME, menu_bar)
@@ -147,6 +158,15 @@ class YFGISAmazonia:
         log_info("Descargando YF GIS Amazonia Tools")
 
         self.registry.unload_all()
+
+        # Sin esto, cada recarga del plugin deja las funciones de la sesion
+        # anterior registradas y QGIS reporta nombres duplicados.
+        try:
+            from .yf_declinacion import desregistrar_funciones
+            desregistrar_funciones()
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "desregistro de funciones", exc_info=True)
 
         if self.menu:
             menu_bar = self.iface.mainWindow().menuBar()

@@ -352,7 +352,7 @@ def diagnostico_entorno():
     ]
     for mod, paq in (("docx", "python-docx"), ("cv2", "opencv-python"),
                      ("winsdk", "winsdk"), ("pytesseract", "pytesseract"),
-                     ("openpyxl", "openpyxl")):
+                     ("openpyxl", "openpyxl"), ("pygeomag", "pygeomag")):
         estado = "disponible" if esta_disponible(mod) else "NO instalado"
         lineas.append("  {:<16} {:<18} {}".format(mod, paq, estado))
     return "\n".join(lineas)

@@ -8,10 +8,11 @@ VERSIÓN 3.0 — Lógica basada en la estructura real:
 """
 
 import logging
+import re
 import math
-from qgis.core import QgsDistanceArea, QgsFeatureRequest
+from qgis.core import QgsUnitTypes, QgsDistanceArea, QgsFeatureRequest
 
-from . import formato_catastral as fc
+from ...core import formato_catastral as fc
 
 
 def obtener_vertices_de_poligono(punto_layer, id_poligono, campos_config=None):
@@ -204,70 +205,168 @@ def obtener_vertices_de_poligono(punto_layer, id_poligono, campos_config=None):
     return vertices
 
 
-def calcular_area_perimetro_feature(feature, pol_layer, campos_config=None):
+def _valor_util(feature, campo):
+    """Valor numerico de un campo, o None si no sirve como dato.
+
+    Un 0, un NULL o un vacio son AUSENCIA de dato, no un area de cero
+    hectareas. La version anterior usaba `if val is not None`, con lo que
+    un campo en 0.0 se aceptaba como valido y nunca se caia a la
+    geometria: la memoria salia con 0.0000 ha.
     """
-    Obtiene área y perímetro de un feature de polígono.
-    Prioridad: campo BD → geometría WGS84.
+    if not campo:
+        return None
+    if campo not in [f.name() for f in feature.fields()]:
+        return None
+    val = feature[campo]
+    if val is None or val == "":
+        return None
+    try:
+        num = float(val)
+    except (ValueError, TypeError):
+        return None
+    return None if num == 0 else num
+
+
+def _interpretar_unidad(val, area_geom_ha):
+    """Decide si `val` esta en hectareas o en m2 comparando con la geometria.
+
+    La heuristica anterior era `if val > 5000: son m2`. Funciona en predios
+    rurales y falla en urbanos: un lote de 3000 m2 quedaba por debajo del
+    umbral, se leia como hectareas y la memoria declaraba 3000 ha en vez
+    de 0.3. Comparar contra la geometria no tiene ese punto ciego, porque
+    el area verdadera siempre esta ahi para desempatar.
+
+    Devuelve (area_ha, unidad_detectada).
+    """
+    como_ha = val
+    como_m2 = val / 10000.0
+    if area_geom_ha and area_geom_ha > 0:
+        if abs(como_m2 - area_geom_ha) < abs(como_ha - area_geom_ha):
+            return round(como_m2, 6), "m2"
+        return round(como_ha, 6), "ha"
+    # sin geometria de referencia, el umbral clasico como ultimo recurso
+    return (round(como_m2, 6), "m2") if val > 5000 else (round(como_ha, 6), "ha")
+
+
+def _desvio_minimo(val, referencias):
+    """Desvio relativo de `val` respecto a la referencia mas cercana.
+
+    Se compara contra la medida elipsoidal Y la plana. Motivo: el campo de
+    un shapefile casi siempre se calculo en UTM plano (ArcGIS, calculadora
+    de campos), mientras la herramienta reporta medida elipsoidal. Esa sola
+    diferencia ya vale ~0.06% en Madre de Dios, y avisaria de un campo que
+    en realidad esta bien. Solo interesa el valor que no cuadra con ninguna
+    de las dos.
+    """
+    refs = [r for r in referencias if r and r > 0]
+    if not refs:
+        return 0.0
+    return min(abs(val - r) / r for r in refs)
+
+
+def calcular_area_perimetro_feature(feature, pol_layer, campos_config=None,
+                                    tolerancia_aviso=0.001):
+    """
+    Obtiene area y perimetro de un feature de poligono.
+    Prioridad: campo BD -> geometria WGS84.
+
+    Un campo en 0, NULL o vacio se considera ausente y se usa la
+    geometria. Si el valor del campo se aparta de la geometria mas de
+    `tolerancia_aviso` (0.5% por defecto), se respeta el campo pero se
+    devuelve un aviso: es sintoma de un area calculada antes de editar la
+    geometria, y una memoria cuyo apartado de area no cuadra con su propio
+    cuadro de vertices es rechazable en registro.
 
     Returns:
-        dict: area (ha), perimetro (m), fuente_area, fuente_perimetro
+        dict: area (ha), perimetro (m), fuente_area, fuente_perimetro,
+              avisos (lista de str)
     """
     if campos_config is None:
         campos_config = {}
 
     geom = feature.geometry()
+    avisos = []
 
-    # ── Campo BD para área ────────────────────────────────────────────────────
+    da = QgsDistanceArea()
+    da.setEllipsoid('WGS84')
+    try:
+        area_geom_ha = round(da.measureArea(geom) / 10000, 6)
+        perim_geom_m = round(da.measurePerimeter(geom), 4)
+    except Exception:
+        area_geom_ha = round(geom.area() / 10000, 6)
+        perim_geom_m = round(geom.length(), 4)
+
+    # medida plana, como referencia adicional para el aviso de desvio
+    try:
+        area_plana_ha = round(geom.area() / 10000, 6)
+        perim_plano_m = round(geom.length(), 4)
+    except Exception:
+        area_plana_ha, perim_plano_m = area_geom_ha, perim_geom_m
+
+    # -- Campo BD para area -------------------------------------------------
+    # POLY_AREA / Shape_Area / SHAPE_STAr son los nombres que genera ArcGIS
+    # con Calculate Geometry, y son los que mas llegan en expedientes.
     c_area = campos_config.get('campo_area') or _detectar_campo(
         pol_layer, ['Area_ha', 'area_ha', 'AREA_HA', 'area', 'AREA',
-                    'hectareas', 'Hectareas', 'HECTAREAS', 'superficie'])
-    area_ha = None; fuente_area = 'geometría'
+                    'hectareas', 'Hectareas', 'HECTAREAS', 'superficie',
+                    'POLY_AREA', 'poly_area', 'Shape_Area', 'SHAPE_Area',
+                    'shape_area', 'SHAPE_STAr', 'area_m2', 'AREA_M2'])
+    area_ha = None
+    fuente_area = 'geometria'
 
-    if c_area:
-        val = feature[c_area] if c_area in [f.name() for f in feature.fields()] else None
-        if val is not None:
-            try:
-                area_ha = float(val)
-                if area_ha > 5000:  # probablemente en m²
-                    area_ha = round(area_ha / 10000, 6)
-                    fuente_area = 'campo BD "{}" (convertido de m²)'.format(c_area)
-                else:
-                    fuente_area = 'campo BD "{}"'.format(c_area)
-            except (ValueError, TypeError):
-                logging.getLogger(__name__).debug("suppressed", exc_info=True)
+    val = _valor_util(feature, c_area)
+    if val is not None:
+        area_ha, unidad = _interpretar_unidad(val, area_geom_ha)
+        fuente_area = 'campo BD "{}"{}'.format(
+            c_area, ' (convertido de m2)' if unidad == 'm2' else '')
+        desvio = _desvio_minimo(area_ha, [area_geom_ha, area_plana_ha])
+        if desvio > tolerancia_aviso:
+            avisos.append(
+                'El area del campo "{}" ({:.4f} ha) difiere {:.2%} de la '
+                'geometria ({:.4f} ha, {:.0f} m2 de diferencia). Suele '
+                'significar que el campo se calculo antes de editar el '
+                'poligono. El cuadro de vertices de la memoria describe la '
+                'geometria, no el campo: si no coinciden, el documento se '
+                'contradice a si mismo.'
+                .format(c_area, area_ha, desvio, area_geom_ha,
+                        abs(area_ha - area_geom_ha) * 10000))
 
     if area_ha is None:
-        da = QgsDistanceArea(); da.setEllipsoid('WGS84')
-        try:   area_ha = round(da.measureArea(geom) / 10000, 6)
-        except Exception: area_ha = round(geom.area() / 10000, 6)
-        fuente_area = 'geometría (WGS84)'
+        area_ha = area_geom_ha
+        fuente_area = 'geometria (WGS84)'
 
-    # ── Campo BD para perímetro ───────────────────────────────────────────────
+    # -- Campo BD para perimetro --------------------------------------------
     c_perim = campos_config.get('campo_perimetro') or _detectar_campo(
-        pol_layer, ['Perímetro', 'Perimetro', 'PERIMETRO', 'perimetro',
-                    'perimeter', 'shape_length', 'Shape_Length'])
-    perim_m = None; fuente_perim = 'geometría'
+        pol_layer, ['Perimetro', 'PERIMETRO', 'perimetro', 'Per\u00edmetro',
+                    'perimeter', 'PERIMETER', 'shape_length', 'Shape_Length',
+                    'Shape_Leng', 'SHAPE_STLe'])
+    perim_m = None
+    fuente_perim = 'geometria'
 
-    if c_perim:
-        val = feature[c_perim] if c_perim in [f.name() for f in feature.fields()] else None
-        if val is not None:
-            try:
-                perim_m = float(val)
-                fuente_perim = 'campo BD "{}"'.format(c_perim)
-            except (ValueError, TypeError):
-                logging.getLogger(__name__).debug("suppressed", exc_info=True)
+    val = _valor_util(feature, c_perim)
+    if val is not None:
+        perim_m = val
+        fuente_perim = 'campo BD "{}"'.format(c_perim)
+        desvio = _desvio_minimo(perim_m, [perim_geom_m, perim_plano_m])
+        if desvio > tolerancia_aviso:
+            avisos.append(
+                'El perimetro del campo "{}" ({:.2f} m) difiere {:.2%} de la '
+                'geometria ({:.2f} m).'
+                .format(c_perim, perim_m, desvio, perim_geom_m))
 
     if perim_m is None:
-        da = QgsDistanceArea(); da.setEllipsoid('WGS84')
-        try:   perim_m = round(da.measurePerimeter(geom), 4)
-        except Exception: perim_m = round(geom.length(), 4)
-        fuente_perim = 'geometría (WGS84)'
+        perim_m = perim_geom_m
+        fuente_perim = 'geometria (WGS84)'
 
-    print("  Área: {:.4f} ha [{}]  |  Perímetro: {:.2f} m [{}]".format(
+    print("  Area: {:.4f} ha [{}]  |  Perimetro: {:.2f} m [{}]".format(
         area_ha, fuente_area, perim_m, fuente_perim))
+    for a in avisos:
+        print("  AVISO: {}".format(a))
 
     return {'area': area_ha, 'perimetro': perim_m,
-            'fuente_area': fuente_area, 'fuente_perimetro': fuente_perim}
+            'fuente_area': fuente_area, 'fuente_perimetro': fuente_perim,
+            'area_geometria': area_geom_ha, 'perimetro_geometria': perim_geom_m,
+            'avisos': avisos}
 
 
 def generar_descripcion_linderos(vertices, modo_azimut=None, decimales_azimut=None):
@@ -292,18 +391,139 @@ def generar_descripcion_linderos(vertices, modo_azimut=None, decimales_azimut=No
     return "; ".join(partes) + "; cerrando así el perímetro del predio."
 
 
+NOMBRES_PROYECCION = {
+    'utm': 'Transversa de Mercator (UTM)',
+    'tmerc': 'Transversa de Mercator',
+    'merc': 'Mercator',
+    'omerc': 'Mercator Oblicua',
+    'lcc': 'Conica Conforme de Lambert',
+    'aea': 'Conica de Areas Iguales de Albers',
+    'laea': 'Azimutal de Areas Iguales de Lambert',
+    'stere': 'Estereografica',
+    'sterea': 'Estereografica Oblicua',
+    'poly': 'Policonica',
+    'cea': 'Cilindrica de Areas Iguales',
+    'eqc': 'Equidistante Cilindrica',
+    'sinu': 'Sinusoidal',
+    'moll': 'Mollweide',
+    'robin': 'Robinson',
+    'longlat': 'Geografica (coordenadas angulares)',
+}
+
+
+def _parametros_proj(crs):
+    """Cadena PROJ del SRC como diccionario de parametros."""
+    txt = crs.toProj()
+    params = {}
+    for tok in txt.strip().split():
+        if tok.startswith('+'):
+            clave, _, val = tok[1:].partition('=')
+            params[clave] = val or True
+    return params
+
+
+def _meridiano_gms(lon):
+    hemi = 'W' if lon < 0 else 'E'
+    lon = abs(lon)
+    grados = int(lon)
+    minutos = int(round((lon - grados) * 60))
+    return u"{}\u00b0{}{}".format(grados,
+                                  "{:02d}'".format(minutos) if minutos else '',
+                                  hemi)
+
+
+def _nombre_elipsoide(crs):
+    """Nombre legible del elipsoide.
+
+    ellipsoidAcronym() devuelve el codigo ('EPSG:7030'), no sirve para un
+    documento. QgsEllipsoidUtils lo resuelve a 'WGS 84', 'International
+    1924', etc.
+    """
+    acronimo = crs.ellipsoidAcronym()
+    try:
+        from qgis.core import QgsEllipsoidUtils
+        for d in QgsEllipsoidUtils.definitions():
+            if d.acronym == acronimo:
+                return d.description.split(' (')[0].strip()
+    except Exception:
+        logging.getLogger(__name__).debug("suppressed", exc_info=True)
+    return acronimo
+
+
+def descripcion_proyeccion(crs):
+    """Proyeccion cartografica del SRC, redactada para la memoria.
+
+    Sustituye al antiguo campo 'Grillado', que era un texto fijo y no
+    describia nada del proyecto. Para UTM incluye zona, hemisferio,
+    meridiano central y factor de escala, que son los parametros que
+    permiten reproducir las coordenadas del cuadro de vertices.
+    """
+    if crs.isGeographic():
+        return NOMBRES_PROYECCION['longlat']
+
+    params = _parametros_proj(crs)
+    acronimo = crs.projectionAcronym() or params.get('proj', '')
+    base = NOMBRES_PROYECCION.get(acronimo)
+    if not base:
+        try:
+            base = crs.operation().description()
+        except Exception:
+            base = acronimo or 'Proyectada'
+
+    if acronimo == 'utm' and 'zone' in params:
+        zona = int(params['zone'])
+        hemisferio = 'Sur' if params.get('south') else 'Norte'
+        merid = zona * 6 - 183
+        return u'{}, zona {} {}, meridiano central {}, factor de escala 0,9996'.format(
+            base, zona, hemisferio, _meridiano_gms(merid))
+
+    partes = [base]
+    if 'lon_0' in params:
+        try:
+            partes.append(u'meridiano central ' + _meridiano_gms(float(params['lon_0'])))
+        except (ValueError, TypeError):
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
+    factor = params.get('k_0') or params.get('k')
+    if factor and factor is not True:
+        partes.append(u'factor de escala {}'.format(str(factor).replace('.', ',')))
+    return u', '.join(partes)
+
+
 def obtener_info_sistema_coordenadas(layer):
-    """Info CRS de la capa."""
-    import re
+    """Info del SRC de la capa para el apartado tecnico del mapa.
+
+    El datum se toma del propio SRC. La version anterior extraia solo el
+    numero de zona con una expresion regular y escribia 'Datum WGS 84'
+    literal, de modo que una capa en PSAD56 o Peru96 se declaraba como
+    WGS 84 en la memoria: un datum falso en un documento registral.
+    """
     crs = layer.crs()
     desc = crs.description()
-    info = {'Sistema de coordenadas': desc, 'Unidades': 'Metros',
-            'Elipsoide': crs.ellipsoidAcronym(), 'Grillado': 'Cada 1 000 metros'}
-    zm = re.search(r'zone\s*(\d+\s*[ns]?)', desc.lower())
-    if zm:
-        info['Sistema de coordenadas'] = 'Datum WGS 84 / UTM zona {}'.format(
-            zm.group(1).upper().strip())
-    return info
+
+    if '/' in desc:
+        datum, resto = [t.strip() for t in desc.split('/', 1)]
+    else:
+        datum, resto = desc.strip(), ''
+
+    zona = re.search(r'zone\s*(\d+)\s*([NS])?', resto, re.IGNORECASE)
+    if zona:
+        hemisferio = {'S': 'Sur', 'N': 'Norte'}.get(
+            (zona.group(2) or '').upper(), '')
+        resto = 'UTM zona {} {}'.format(zona.group(1), hemisferio).strip()
+
+    sistema = 'Datum {}{}'.format(datum, ', ' + resto if resto else '')
+    if crs.authid():
+        sistema = '{} ({})'.format(sistema, crs.authid())
+
+    try:
+        unidades = QgsUnitTypes.toString(crs.mapUnits()).capitalize()
+    except Exception:
+        unidades = 'Metros'
+
+    return {'Sistema de coordenadas': sistema,
+            'Unidades': unidades,
+            'Elipsoide': _nombre_elipsoide(crs),
+            u'Proyecci\u00f3n': descripcion_proyeccion(crs)}
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
