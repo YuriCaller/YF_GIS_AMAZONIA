@@ -51,7 +51,6 @@ def _purgar_submodulos():
     cacheado con el contenido de una version anterior, `import` lo devuelve
     tal cual y nunca se relee el disco.
     """
-    import sys
     prefijo = __name__ + "."
     for nombre in [m for m in sys.modules if m.startswith(prefijo)]:
         del sys.modules[nombre]
@@ -572,7 +571,7 @@ class Tool(BaseTool):
                         if texto and texto.upper() != "NULL":
                             return texto
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("suppressed", exc_info=True)
         return (cfg.get("nombre_manual") or "").strip()
 
     def _extraer_nombre_dni(self, feature, datos):

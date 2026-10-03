@@ -31,7 +31,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from .formato_catastral import (azimut_a_rumbo_gms, azimut_decimal_a_gms,
                                 azimut_desde_coordenadas,

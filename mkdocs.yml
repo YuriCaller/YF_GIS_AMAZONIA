@@ -86,6 +86,7 @@ nav:
       - Catastral:
           - herramientas/memoria_descriptiva.md
           - herramientas/segmentador.md
+          - herramientas/cogo_traverse.md
           - herramientas/vector_geometry.md
           - herramientas/yf_tools_plus.md
           - herramientas/polygon_divider.md

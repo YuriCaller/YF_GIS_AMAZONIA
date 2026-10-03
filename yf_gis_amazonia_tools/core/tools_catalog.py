@@ -92,6 +92,12 @@ HERRAMIENTAS = (
         "genera las capas de segmentos y vértices.",
         "Catastral", "1.0.0", "segmentador.png"),
     Herramienta(
+        "cogo_traverse", "COGO — Poligonal en Vivo",
+        "Dibuja el predio lado a lado sobre el lienzo introduciendo azimut "
+        "y distancia, con previsualización, deshacer, error de cierre y "
+        "compensación Bowditch.",
+        "Catastral", "3.5.0", "cogo_traverse.png"),
+    Herramienta(
         "vector_geometry", "Calculadora de Geometría Vectorial",
         "Área, perímetro, centroide, longitud y azimut sobre la propia "
         "capa, con método elipsoidal o plano.",

@@ -26,6 +26,7 @@ Dos principios recorren toda la suite:
 |---|---|
 | [Memoria Descriptiva](herramientas/memoria_descriptiva.md) | Genera la memoria en Word con cuadro de vértices y narrativa de colindancias |
 | [Segmentador de Parcelas](herramientas/segmentador.md) | Azimuts, ángulos internos y distancias por lado |
+| [COGO — Poligonal en Vivo](herramientas/cogo_traverse.md) | Traza el predio lado a lado por azimut y distancia, con cierre y Bowditch |
 | [Calculadora de Geometría Vectorial](herramientas/vector_geometry.md) | Área, perímetro, centroide y azimut sobre la propia capa |
 | [YF Tools Plus](herramientas/yf_tools_plus.md) | Tabla → Polígono desde Excel o CSV, con multipolígono |
 | [Divisor de Polígonos](herramientas/polygon_divider.md) | División por área exacta, partes iguales o porcentajes |

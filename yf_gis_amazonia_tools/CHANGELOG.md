@@ -8,7 +8,27 @@ y el proyecto usa [Versionado Semantico](https://semver.org/lang/es/).
 
 ---
 
-## 3.4.0 - 2026-09-10
+## 3.5.0 - 2026-10-02
+
+### COGO - POLIGONAL EN VIVO (HERRAMIENTA NUEVA)
+
+- Dibuja el predio lado a lado directamente sobre el lienzo: se fija el origen con un clic o por coordenadas, y cada lado se introduce como azimut y distancia. La figura se previsualiza con banda elastica mientras se construye.
+- Complementa el modo «Reconstruir predio» de Memoria Descriptiva sin solaparse: aquel parte de una tabla pegada de un expediente, este del dibujo interactivo. Ambos comparten core/poligonal.py, de modo que el parseo de azimuts, el recorrido, el cierre y la compensacion son exactamente el mismo codigo.
+- Deshacer lado a lado, cierre explicito de la figura y reinicio.
+- Error de cierre lineal y relativo en pantalla, con compensacion Bowditch opcional y su casilla de forzado separada, respetando el freno del nucleo.
+- Antes de guardar se valida la geometria con isGeosValid(), lo que detecta lados cruzados por un azimut mal introducido.
+- El azimut es obligatorio en cada lado: el COGO en vivo no admite linderos naturales sin azimut, y lo dice explicitamente en vez de dibujar algo incorrecto.
+- Acepta las tres formas de azimut del nucleo: decimal, grados-minutos-segundos y rumbo por cuadrante.
+- Con esta son 18 herramientas. Registrada en plugin_manager.py y en tools_catalog.py, con icono propio.
+
+### CORRECCIONES
+
+- Los dos `except: pass` del unload de la herramienta nueva pasan a registro en debug, siguiendo la convencion de la suite.
+- qt_compat exporta CrossCursor, DashLine, LineGeometry y PolygonGeometry, necesarios para el map tool y resueltos con ambito para Qt6.
+- Un fallo al abrir el COGO deja el traceback en el registro de QGIS en vez de imprimirlo en stdout, como el resto de la suite.
+- metadata.txt: el campo about decia 17 herramientas; ahora 18, con el COGO en la seccion de catastro.
+
+## 3.4.1 - 2026-09-10
 
 Reune el trabajo de las iteraciones internas 3.2.0 a 3.3.3, que no llegaron a
 publicarse. Dos de ellas contenian regresiones ya corregidas aqui, por lo que
@@ -48,6 +68,7 @@ no se distribuyen por separado.
 - Qt6 / QGIS 4.2: corregidos QFormLayout.FieldRole y setTextFormat con entero, ambos validos en PyQt5 y rotos en PyQt6. El primero impedia construir el dialogo de Memoria Descriptiva en QGIS 4.2.
 - qt_compat exporta ItemIsEnabled, ItemIsSelectable, Stretch, RichText, PlainText, FieldRole, LabelRole y SpanningRole.
 - procesamiento_coordenadas ya no llama a toProj4(), retirado en QGIS 4.
+- Bandit y flake8 limpios: sustituidos los dos `except: pass` que quedaban en Memoria Descriptiva por el registro en debug que ya usa el resto de la suite, y eliminada una redefinicion de `sys` dentro de _purgar_submodulos.
 
 ### REORGANIZACION INTERNA
 

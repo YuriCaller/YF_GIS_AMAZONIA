@@ -2,6 +2,20 @@
 
 El historial completo y detallado está en el archivo `metadata.txt` del plugin y en [las versiones publicadas en GitHub](https://github.com/YuriCaller/YF_GIS_AMAZONIA/releases). Aquí se resumen los cambios que afectan a cómo se usa la suite.
 
+## 3.5.0
+
+- **COGO — Poligonal en Vivo** (herramienta nueva, la 18.ª): traza el predio lado a lado sobre el lienzo con azimut y distancia, en decimal, grados-minutos-segundos o rumbo por cuadrante. Error de cierre en pantalla y compensación Bowditch opcional. Comparte el núcleo de cálculo con *Reconstruir predio*.
+
+## 3.4.1
+
+- **Memoria Descriptiva → Reconstruir predio**: reconstruye el polígono pegando el cuadro de vértices desde Excel, Word o PDF, con corrección de declinación magnética (WMM), error de cierre y compensación Bowditch.
+- **El datum ya no se escribe a mano.** Una capa en PSAD56 o Peru96 dejaba de declararse como WGS 84 en la memoria. Nueva fila *Proyección* en la información técnica del mapa.
+- Área y perímetro en 0 o vacíos se toman de la geometría, con aviso si el campo se aparta de ella.
+
+## 3.1.0
+
+- **Azimut magnético para trabajo de campo** en la Calculadora de Geometría Vectorial, con declinación del modelo WMM, convergencia de meridianos y fecha del modelo.
+
 ## 3.0.7
 
 - **Manual de usuario en línea**, accesible desde el diálogo «Acerca de» y desde cada herramienta.

@@ -20,6 +20,7 @@ Autor: Yuri F. Caller Cordova — TUCSA / gis-amazonia.pe
 """
 
 import datetime
+import logging
 
 from qgis.PyQt import QtWidgets
 from qgis.PyQt.QtCore import QDate
@@ -253,7 +254,7 @@ class TabReconstruccion(QtWidgets.QWidget):
             if self.cboNorte.currentData() == "cuadricula":
                 self.spinConv.setValue(g)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("suppressed", exc_info=True)
 
     def _avisar(self, texto, ok):
         color = "#2e7d32" if ok else "#c62828"

@@ -245,6 +245,15 @@ class YFGISAmazonia:
             add_to_toolbar=True,
         )
 
+        self.registry.register(
+            menu=catastral_menu, toolbar=self.toolbar,
+            tool_id="cogo_traverse",
+            label="COGO — Poligonal en Vivo",
+            icon="cogo_traverse.png",
+            module_path="tools.cogo_traverse",
+            add_to_toolbar=True,
+        )
+
         # ── Geodesia / GNSS ───────────────────────────────────────
         gnss_menu = self.menu.addMenu(
             self._icon("gnss.png"), "Geodesia / GNSS"

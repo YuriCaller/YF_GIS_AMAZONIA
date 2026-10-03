@@ -6,6 +6,7 @@ Import from here instead of directly from qgis.PyQt to handle
 API differences between PyQt5 (QGIS ≤ 3.34) and PyQt6 (QGIS ≥ 3.40).
 """
 
+from qgis.core import QgsWkbTypes
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QHeaderView
 
@@ -57,6 +58,12 @@ from qgis.PyQt.QtWidgets import QFormLayout
 FieldRole = _resolve_enum(QFormLayout, "ItemRole.FieldRole", "FieldRole")
 LabelRole = _resolve_enum(QFormLayout, "ItemRole.LabelRole", "LabelRole")
 SpanningRole = _resolve_enum(QFormLayout, "ItemRole.SpanningRole", "SpanningRole")
+CrossCursor = _resolve_enum(Qt, "CursorShape.CrossCursor", "CrossCursor")
+DashLine = _resolve_enum(Qt, "PenStyle.DashLine", "DashLine")
+LineGeometry = _resolve_enum(
+    QgsWkbTypes, "GeometryType.LineGeometry", "LineGeometry")
+PolygonGeometry = _resolve_enum(
+    QgsWkbTypes, "GeometryType.PolygonGeometry", "PolygonGeometry")
 
 # ── QVariant compatibility ──────────────────────────────────────────
 try:

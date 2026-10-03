@@ -2,14 +2,14 @@
 name=YF GIS Amazonia Tools
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-description=Suite de 17 herramientas GIS para catastro, gestion forestal y topografia en la Amazonia peruana.
-version=3.4.0
+description=Suite de 18 herramientas GIS para catastro, gestion forestal y topografia en la Amazonia peruana.
+version=3.5.0
 author=Yuri Fabian Caller Cordova
 email=yuricaller@gmail.com
 
-about=Suite unificada de 17 herramientas GIS para topografia, catastro y gestion forestal en la Amazonia peruana, desarrollada sobre expedientes reales de Madre de Dios y conforme a la normativa peruana (SERFOR, SERNANP, MIDAGRI, GOREMAD).
+about=Suite unificada de 18 herramientas GIS para topografia, catastro y gestion forestal en la Amazonia peruana, desarrollada sobre expedientes reales de Madre de Dios y conforme a la normativa peruana (SERFOR, SERNANP, MIDAGRI, GOREMAD).
     ANALISIS: analisis de superposicion de derechos contra geoservicios oficiales (WFS / ArcGIS REST) y capas locales, con catalogo de servicios editable e informe trazable; busqueda multicapa de atributos con reportes.
-    CATASTRO Y GEOMETRIA: generacion automatica de memorias descriptivas en Word; segmentador de parcelas con azimuts y angulos; calculadora de geometria vectorial (elipsoidal o plana) para planos legales; division de predios por area exacta, partes iguales o porcentaje; construccion de poligonos desde tablas Excel/CSV con soporte multipoligono; georreferenciacion en vivo de planos escaneados e imagenes de dron; etiquetado tecnico y exportacion de expedientes.
+    CATASTRO Y GEOMETRIA: generacion automatica de memorias descriptivas en Word; segmentador de parcelas con azimuts y angulos; calculadora de geometria vectorial (elipsoidal o plana) para planos legales; division de predios por area exacta, partes iguales o porcentaje; construccion de poligonos desde tablas Excel/CSV con soporte multipoligono; COGO para trazar poligonales por azimut y distancia en vivo sobre el lienzo; georreferenciacion en vivo de planos escaneados e imagenes de dron; etiquetado tecnico y exportacion de expedientes.
     GEODESIA: post-proceso GNSS PPK/PPP con RTKLIB, efemerides precisas automaticas, correccion de antena ANTEX, validacion antifalso-fix y procesamiento por lotes.
     PRODUCCION CARTOGRAFICA: generador de cajetin con expresiones dinamicas, gestor de estilos de tabla, redimensionado proporcional de composiciones, comparacion visual con cortina y navegacion a coordenadas en DD/GMS/UTM/MGRS.
     HONESTIDAD DE LOS RESULTADOS: una capa que no puede leerse se reporta como NO EVALUADA, nunca como libre de superposicion, y los informes declaran la cobertura real del analisis. Los archivos locales se acreditan con SHA-256; los geoservicios, como instantanea con URL, capa, hora y conteo.
@@ -29,15 +29,13 @@ deprecated=False
 server=False
 hasProcessingProvider=no
 
-tags=amazonia,peru,cadastre,cadastral,superposition,overlap,overlap analysis,wfs,ogc,arcgis rest,geoservices,geoservicios,serfor,sernanp,midagri,anp,protected areas,concessions,land tenure,surveying,topography,gnss,ppk,ppp,rtklib,geodesy,memoria descriptiva,atlas,word,docx,agroforestry,forestry,saf,attribute search,azimuth,vertices,coordinates,polygon,excel,swipe,compare,goto,navigate,smart labels,vector geometry,layout,rescaler,table style,title block,cajetin,batch export,layout tools,compositor,georeferencer,georeferencing,warp,tps,gcp,control points,raster,scanned plan,arcgis
+tags=amazonia,peru,cadastre,cadastral,superposition,overlap,overlap analysis,wfs,ogc,arcgis rest,geoservices,geoservicios,serfor,sernanp,midagri,anp,protected areas,concessions,land tenure,surveying,topography,gnss,ppk,ppp,rtklib,geodesy,memoria descriptiva,atlas,word,docx,agroforestry,forestry,saf,attribute search,azimuth,vertices,coordinates,polygon,excel,swipe,compare,goto,navigate,smart labels,vector geometry,layout,rescaler,table style,title block,cajetin,batch export,layout tools,compositor,georeferencer,georeferencing,warp,tps,gcp,control points,raster,scanned plan,arcgis,cogo,traverse,poligonal,bearing,bowditch
 
-changelog=Version 3.4.0: Memoria Descriptiva reconstruye el predio a partir del
-    cuadro de vertices pegado desde Excel, Word o PDF, con correccion de
-    declinacion magnetica por modelo WMM, error de cierre y compensacion
-    Bowditch; el datum ya no se escribe a mano, de modo que una capa en PSAD56
-    deja de declararse como WGS 84; nueva fila Proyeccion en la informacion
-    tecnica del mapa; area y perimetro caen a la geometria cuando el campo esta
-    en cero y avisan si se apartan de ella; compatibilidad Qt6 / QGIS 4.2.
+changelog=Version 3.5.0: nueva herramienta COGO - Poligonal en Vivo, que dibuja
+    el predio lado a lado sobre el lienzo introduciendo azimut y distancia, con
+    previsualizacion, deshacer, error de cierre y compensacion Bowditch.
+    Complementa el modo Reconstruir predio de Memoria Descriptiva, que parte de
+    una tabla pegada. Ambas comparten el mismo nucleo de calculo.
 
     Changelog completo:
     https://github.com/YuriCaller/YF_GIS_AMAZONIA/blob/main/yf_gis_amazonia_tools/CHANGELOG.md
